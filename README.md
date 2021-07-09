@@ -186,3 +186,8 @@ http://example.com/json.php に設置されていると仮定します。
     - `=` `!=` `<>` `>` `<` `>=` `<=` の7種類
 - `value` ：値
 
+## ファイル
+
+- `json.php` 本体。この中で設置するのはこれだけです。
+- `migrate.json` マイグレーションファイルのサンプル
+- `sample.html` Javascriptからのアクセスサンプル

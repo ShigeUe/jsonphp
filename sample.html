@@ -1,0 +1,306 @@
+<!--
+以下のようなマイグレーションファイル
+{
+    "books": {
+        "id": "KEY",
+        "name": "TEXT",
+        "price": "INTEGER",
+        "created_at": "TEXT",
+        "updated_at": "TEXT"
+    }
+}
+-->
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+    <meta charset="UTF-8">
+    <meta http-equiv="X-UA-Compatible" content="IE=edge">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Document</title>
+    <style>
+        * {
+            box-sizing: border-box;
+        }
+        #content {
+            display: flex;
+            flex-flow: row wrap;
+        }
+        form {
+            width: 500px;
+            flex-grow: 0;
+            flex-shrink: 0;
+            border: 1px solid #666;
+            padding: 20px;
+            border-radius: 10px;
+            margin: 0 10px 10px 0;
+        }
+        th {
+            font-size: 0.9rem;
+            text-align: left;
+        }
+        #RESULT {
+            width: 1010px;
+            flex-grow: 0; 
+            flex-shrink: 0;
+            border: 1px solid #666;
+            border-radius: 10px;
+            padding: 20px;
+            min-height: 300px;
+        }
+
+        #token_area {
+            margin-bottom: 1em;
+        }
+    </style>
+</head>
+<body>
+    <div id="token_area">
+        token: <input type="text" id="token" size="40">
+    </div>
+    
+    <div id="content">
+        <form id="auth_form">
+            <h3>Auth.</h3>
+            <table>
+                <tr>
+                    <th>username: </th><td><input type="text" name="username" required></td>
+                </tr>
+                <tr>
+                    <th>password: </th><td><input type="password" name="password" required></td>
+                </tr>
+            </table>
+            <br>
+            <button type="button" id="AUTH">AUTH</button>
+        </form>
+        <form id="add_form">
+            <h3>Add a book.</h3>
+            <table>
+                <tr>
+                    <th>name: </th><td><input type="text" name="name" required></td>
+                </tr>
+                <tr>
+                    <th>price: </th><td><input type="text" name="price" required></td>
+                </tr>
+            </table>
+            <br>
+            <button type="button" id="ADD">ADD</button>
+        </form> 
+        <form id="change_form">
+            <h3>Change a book.</h3>
+            idは必須。name、priceは変えたいものを入れる。<br>
+            <br>
+            <table>
+                <tr>
+                    <th>id: </th><td><input type="text" name="id" required></td>
+                </tr>
+                <tr>
+                    <th>name: </th><td><input type="text" name="name"></td>
+                </tr>
+                <tr>
+                    <th>price: </th><td><input type="text" name="price"></td>
+                </tr>
+            </table>
+            <br>
+            <button type="button" id="CHANGE">CHANGE</button>
+        </form> 
+        <form id="delete_form">
+            <h3>Delete a book.</h3>
+            <table>
+                <tr>
+                    <th>id: </th><td><input type="text" name="id" required></td>
+                </tr>
+            </table>
+            <br>
+            <button type="button" id="DELETE">DELETE</button>
+        </form> 
+        <form id="get_form">
+            <h3>Get books.</h3>
+            idかnameを指定することも出来る。<br>
+            <br>
+            <table>
+                <tr>
+                    <th>id: </th><td><input type="text" id="get_id"></td>
+                </tr>
+                <tr>
+                    <th>name: </th><td><input type="text" id="get_name"></td>
+                </tr>
+            </table>
+            <br>
+            <button type="button" id="GET">GET</button> <button type="button" id="CLEAR">CLEAR RESULT</button>
+        </form>
+        <div id="RESULT"></div>
+    </div>
+<script>
+"use strict";
+
+const get_now = () => {
+    const n = new Date;
+
+    return n.getFullYear() + "-" +
+        ("0" + (n.getMonth() + 1)).substr(-2) + "-" +
+        ("0" + n.getDate()).substr(-2) + " " +
+        ("0" + n.getHours()).substr(-2) + ":" +
+        ("0" + n.getMinutes()).substr(-2) + ":" +
+        ("0" + n.getSeconds()).substr(-2);
+
+};
+
+
+document.addEventListener('DOMContentLoaded', () => {
+    document.getElementById('AUTH').addEventListener('click', async () => {
+        const form = document.getElementById('auth_form');
+        const res = await fetch("json.php?cmd=auth", {
+            method: "POST",
+            body: new FormData(form)
+        });
+
+        const ret = await res.json();
+        if (ret.result) {
+            document.getElementById('token').value = ret.data.token;
+            form.reset();
+            document.getElementById('GET').dispatchEvent(new Event('click'));
+        }
+        else {
+            alert(ret.message);
+        }
+
+    });
+    document.getElementById('ADD').addEventListener('click', async () => {
+        const form = document.getElementById('add_form');
+        const data = new FormData();
+        const now = get_now();
+        const row = {
+            name: form.name.value,
+            price: form.price.value,
+            created_at: now,
+            updated_at: now,
+        };
+        data.append('data', JSON.stringify(row));
+        data.append('token', document.getElementById('token').value);
+
+        const res = await fetch("json.php?cmd=add&table=books", {
+            method: "POST",
+            body: data
+        });
+
+        const ret = await res.json();
+        if (ret.result) {
+            form.reset();
+            document.getElementById('GET').dispatchEvent(new Event('click'));
+        }
+        else {
+            alert(ret.message);
+        }
+    });
+    document.getElementById('CHANGE').addEventListener('click', async () => {
+        const form = document.getElementById('change_form');
+        const data = new FormData();
+        const now = get_now();
+
+        const row = {
+            updated_at: now
+        };
+        if (form.name.value) {
+            row.name = form.name.value;
+        }
+        if (form.price.value) {
+            row.price = form.price.value;
+        }
+        data.append('data', JSON.stringify(row));
+
+        if (form.id.value) {
+            data.append('where', JSON.stringify({column: 'id', cond: '=', value: form.id.value}));
+        }
+        else {
+            return;
+        }
+        data.append('token', document.getElementById('token').value);
+
+        const res = await fetch("json.php?cmd=change&table=books", {
+            method: "POST",
+            body: data
+        });
+
+        const ret = await res.json();
+        if (ret.result) {
+            form.reset();
+            document.getElementById('GET').dispatchEvent(new Event('click'));
+        }
+        else {
+            alert(ret.message);
+        }
+    });
+    document.getElementById('DELETE').addEventListener('click', async () => {
+        const form = document.getElementById('delete_form');
+        const data = new FormData();
+        data.append('where', JSON.stringify({column: 'id', cond: '=', value: form.id.value}));
+        data.append('token', document.getElementById('token').value);
+        const res = await fetch("json.php?cmd=delete&table=books", {
+            method: "POST",
+            body: data
+        });
+
+        const ret = await res.json();
+        if (ret.result) {
+            form.reset();
+            document.getElementById('GET').dispatchEvent(new Event('click'));
+        }
+        else {
+            alert(ret.message);
+        }
+    });
+    document.getElementById('GET').addEventListener('click', async () => {
+        const data = new FormData();
+        if (document.getElementById('get_id').value != '') {
+            data.append('where', JSON.stringify(
+                {column: 'id', cond: '=', value: document.getElementById('get_id').value}
+            ));
+        }
+        else if (document.getElementById('get_name').value != '') {
+            data.append('where', JSON.stringify(
+                {column: 'name', cond: '=', value: document.getElementById('get_name').value}
+            ));
+        }
+        data.append('token', document.getElementById('token').value);
+        const res = await fetch("json.php?cmd=get&table=books", {
+            method: "POST",
+            body: data
+        });
+
+        const ret = await res.json();
+        if (ret.result) {
+            const RESULT = document.getElementById('RESULT');
+
+            if (ret.data.length <= 0) {
+                RESULT.innerHTML = 'NO DATA';
+                return;
+            }
+            const table = document.createElement('table');
+            table.border = "1";
+            ret.data.forEach(el => {
+                const tr = document.createElement('tr');
+                Object.keys(el).forEach(col => {
+                    const th = document.createElement('th');
+                    th.innerText = col;
+                    const td = document.createElement('td');
+                    td.innerText = el[col];
+
+                    tr.appendChild(th);
+                    tr.appendChild(td);
+                });
+                table.appendChild(tr);
+            });
+            RESULT.innerHTML = '';
+            RESULT.appendChild(table);
+        }
+        else {
+            alert(ret.message);
+        }
+    });
+    document.getElementById('CLEAR').addEventListener('click', async () => {
+        document.getElementById('RESULT').innerHTML = '';
+    });
+});
+</script>
+</body>
+</html>
