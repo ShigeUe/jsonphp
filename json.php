@@ -16,7 +16,7 @@ define('BASE_DIRNAME',     'jsonphp');         // 上記のファイルを格納
 define('EXPIRATION',       30);                // トークンの有効期限（分）
 // 次のdefineをコメントアウトすると自動的にホームディレクトリの下の jsonphp　を利用
 // さくらのレンタルサーバー対策
-define('HOME',             '/var/www/dev/json/' . BASE_DIRNAME . '/');
+// define('HOME',             '/var/www/dev/json/' . BASE_DIRNAME . '/');
 
 // 認証情報
 // 1行に付き1件のログイン情報を書いてください。パスワード平文で申し訳ない。
@@ -38,7 +38,7 @@ if (!defined('HOME')) {
     // 定数HOMEが設定されていなければ、さくらのレンタルサーバー用のものを設定する
     $path_elements = explode('/', trim($_SERVER['DOCUMENT_ROOT'], '/'));
     $home = '/' . $path_elements[0] . '/' . $path_elements[1] . '/' . BASE_DIRNAME . '/';
-    difine('HOME', $home);
+    define('HOME', $home);
 }
 
 /**
