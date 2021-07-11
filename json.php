@@ -4,11 +4,7 @@
  * 
  */
 
-/*
-------------------------------------------------------
-　設定
-------------------------------------------------------
-*/
+// 設定 -----------------------------------------------------
 
 define('MIGRATE_FILENAME', 'migrate.json');    // マイグレーションファイルの名前
 define('DB_FILENAME',      'db.sqlite3');      // SQLite3のデータベースファイルの名前
@@ -18,21 +14,40 @@ define('EXPIRATION',       30);                // トークンの有効期限（
 // さくらのレンタルサーバー対策
 // define('HOME',             '/var/www/dev/json/' . BASE_DIRNAME . '/');
 
-// 認証情報
-// 1行に付き1件のログイン情報を書いてください。パスワード平文で申し訳ない。
-define('AUTH', [
-    ["username" => "test-user", "password" => "PassWord"],
+// 認証に使うusersテーブルの初期データ
+define('USERS_TABLE_DATA', [
+    [
+        "username" => 'testuser',
+        "password" => '$2y$10$MqTUmfUeTltU1MLti5u3eOzE6qpVWQ6IWzxBouXPYn.WBqf.WPn66', // PassWord
+        "email"    => 'admin@example.com'
+    ]
 ]);
 
+// 設定おわり -----------------------------------------------
 
 
 
+
+
+
+// usersテーブル定義（追加のみにしてください）
+define('USERS_TABLE_DEF', [
+    "id"         => "KEY",
+    "username"   => "TEXT NOT NULL",
+    "password"   => "TEXT NOT NULL",
+    "email"      => "TEXT",
+    "created_at" => "TEXT",
+    "updated_at" => "TEXT",
+]);
 
 /**
  * 初期設定
  */
-ini_set('display_errors', 0);
+ini_set('display_errors', 1);
 header('Content-type: application/json; charset=utf-8');
+
+// 現在の日時
+$now = date('Y-m-d H:i:s');
 
 if (!defined('HOME')) {
     // 定数HOMEが設定されていなければ、さくらのレンタルサーバー用のものを設定する
@@ -51,6 +66,12 @@ if (!defined('HOME')) {
  */
 
 function return_json(bool $result, $messageOrData) {
+    if (!$result) {
+        $bt = debug_backtrace();
+        $caller = array_shift($bt);
+        $messageOrData .= ' (' . $caller['line'] . ')';
+    }
+
     echo json_encode([
         'result' => $result,
         $result ? 'data' : 'message' => $messageOrData
@@ -60,6 +81,7 @@ function return_json(bool $result, $messageOrData) {
 
 /**
  * is_column_name_valid
+ * カラム名の妥当性チェック
  * 
  * @param string $name
  * @return bool
@@ -86,6 +108,45 @@ function table_exists($table_name) {
 }
 
 /**
+ * get_schema
+ * テーブルの構造を取得する
+ * 
+ * @param string $table テーブル名
+ * @return array テーブル構造
+ */
+function get_schema($table) {
+    global $pdo;
+
+    if (!table_exists($table)) {
+        return [];
+    }
+    $stmt = $pdo->query("PRAGMA table_info('{$table}');");
+    $rows = $stmt->fetchAll(PDO::FETCH_ASSOC);
+
+    return $rows;
+}
+
+/**
+ * has_column
+ * テーブルがカラムを持っているか
+ * 
+ * @param string $table
+ * @param string $column
+ * @return bool
+ */
+function has_column($table, $column) {
+    global $pdo;
+
+    $cols = get_schema($table);
+    foreach ($cols as $col) {
+        if ($col['name'] === $column) {
+            return true;
+        }
+    }
+    return false;
+}
+
+/**
  * is_vector
  * 通常の配列かどうか
  * 
@@ -99,7 +160,6 @@ function is_vector(array $arr) {
 /**
  * decompose_input_data
  * 入力データをカラムの配列と値の配列に分解します
- * @param array $data
  * @param array $columns 参照形式
  * @param array $values  参照形式
  */
@@ -139,6 +199,7 @@ function exec_query($sql, $values) {
 
         $stmt = $pdo->prepare($sql);
         $stmt->execute($values);
+        // 実行するSQLがSELECTだったら、値を返す
         if (substr($sql, 0, 6) === 'SELECT') {
             $rows = $stmt->fetchAll(PDO::FETCH_ASSOC);
         }
@@ -156,13 +217,14 @@ function exec_query($sql, $values) {
  * tokenをDBに格納
  * 
  * @param string $token
+ * @param int $user_id
  */
-function add_token($token) {
-    global $pdo;
+function add_token($token, $user_id) {
+    global $pdo, $now;
 
     try {
-        $stmt = $pdo->prepare('INSERT INTO jsonphp_sessions (token,stamp) VALUES (?,?)');
-        $stmt->execute([$token, date('Y-m-d H:i:s')]);
+        $stmt = $pdo->prepare('INSERT INTO jsonphp_sessions (token,stamp,user_id) VALUES (?,?,?)');
+        $stmt->execute([$token, $now, $user_id]);
     }
     catch(PDOException $e) {
         return_json(false, "SQLエラー：" . $e->getMessage());
@@ -170,12 +232,36 @@ function add_token($token) {
 }
 
 /**
- * is_token_valid
- * tokenが有効かどうか。有効ならトークンの更新もする
+ * get_user_token
+ * 
+ * @param int $user_id
+ * @return string
+ */
+function get_user_token($user_id) {
+    global $pdo;
+
+    try {
+        $stmt = $pdo->prepare('SELECT token FROM jsonphp_sessions WHERE user_id=? AND stamp>=?');
+        $stmt->execute([$user_id, date('Y-m-d H:i:s', time() - EXPIRATION * 60)]);
+        $row = $stmt->fetch(PDO::FETCH_ASSOC);
+
+        if ($row) {
+            return $row['token'];
+        }
+    }
+    catch (PDOException $e) {
+        // 握りつぶす
+    }
+    return false;
+}
+
+/**
+ * get_user_id_by_token
+ * tokenからuser_idを取得する。またtokenを更新する
  * 
  * @return bool
  */
-function is_token_valid() {
+function get_user_id_by_token() {
     global $pdo;
 
     $token = filter_input(INPUT_POST, 'token');
@@ -183,33 +269,45 @@ function is_token_valid() {
         return false;
     }
 
-    $valid = false;
+    $user_id = false;
     try {
-        $stmt = $pdo->prepare('SELECT stamp FROM jsonphp_sessions WHERE token=?');
+        $stmt = $pdo->prepare('SELECT user_id,stamp FROM jsonphp_sessions WHERE token=?');
         $stmt->execute([$token]);
         $row = $stmt->fetch(PDO::FETCH_ASSOC);
         if ($row && $row['stamp'] >= date('Y-m-d H:i:s', time() - EXPIRATION * 60)) {
-            $valid = true;
+            $user_id = $row['user_id'];
         }
     }
     catch(PDOException $e) {
         return_json(false, "SQLエラー：" . $e->getMessage());
     }
 
-    if ($valid) {
-        try {
-            $pdo->beginTransaction();
-            // 存在するなら更新する
-            $stmt = $pdo->prepare("UPDATE jsonphp_sessions SET stamp=? WHERE token=?");
-            $stmt->execute([date('Y-m-d H:i:s'), $token]);
+    if ($user_id) {
+        if (!update_token($token)) {
+            return_json(false, "トークンの更新エラー");
         }
-        catch(PDOException $e) {
-            $pdo->rollBack();
-            return_json(false, "SQLエラー：" . $e->getMessage());
-        }
-        $pdo->commit();
     }
-    return $valid;
+    return $user_id;
+}
+
+/**
+ * update_token
+ * トークンの有効期限を延長する
+ */
+function update_token($token) {
+    global $pdo, $now;
+
+    try {
+        $pdo->beginTransaction();
+        $stmt = $pdo->prepare("UPDATE jsonphp_sessions SET stamp=? WHERE token=?");
+        $stmt->execute([$now, $token]);
+    }
+    catch(PDOException $e) {
+        $pdo->rollBack();
+        return false;
+    }
+    $pdo->commit();
+    return true;
 }
 
 /**
@@ -235,24 +333,27 @@ function delete_old_token() {
 
 
 
+// ---------------------------------------------------------------------
+// メイン
+// ---------------------------------------------------------------------
 
 // コマンドを取得
 $command = strtoupper(filter_input(INPUT_GET, 'cmd'));
 
-/**
- * PDO
- */
+// PDOでデータベースへ接続＆設定
 try {
     $pdo = new \PDO('sqlite:' . HOME . DB_FILENAME);
     $pdo->setAttribute(PDO::ATTR_ERRMODE, PDO::ERRMODE_EXCEPTION);
+    // 外部キー制約を有効にする
+    $pdo->exec('PRAGMA foreign_keys=true');
 }
 catch (PDOException $e) {
     return_json(false, "PDOエラー：" . $e->getMessage());
 }
 
-/**
- * マイグレーション
- */
+// ---------------------------------------------------------------------
+// マイグレーション
+// ---------------------------------------------------------------------
 if ($command === 'MIGRATE') {
     if (!file_exists(HOME . MIGRATE_FILENAME)) {
         // 指定のマイグレーションファイルが無い
@@ -266,6 +367,13 @@ if ($command === 'MIGRATE') {
         return_json(false, '正しいマイグレーションファイルではありません');
     }
 
+    if (defined('USERS_TABLE_DEF')) {
+        $table_defs['users'] = USERS_TABLE_DEF;
+    }
+    else {
+        return_json(false, 'usersテーブルの定義がありません');
+    }
+
     foreach ($table_defs as $table => $columns) {
         if (table_exists($table)) {
             // テーブルが存在していたら、何もしない
@@ -273,16 +381,15 @@ if ($command === 'MIGRATE') {
         }
         $column_defs = [];
         foreach ($columns as $name => $type) {
-            $type = strtoupper($type);
-            if ($type !== 'TEXT' && $type !== 'INTEGER' && $type !== 'KEY' && $type !== 'REAL') { //BLOBは外す
-                // typeが正しくない
-                return_json(false, "テーブル：$table カラム：$name のカラムタイプが正しくありません。");
+            // $typeは区切り文字だけは許さない
+            if (preg_match('/[,;]/', $type)) {
+                return_json(false, "テーブル：$table カラム：$name のカラムタイプに不正な文字があります");
             }
             if (!is_column_name_valid($name)) {
                 // nameが正しくない（英数+アンダースコア1～100文字）
                 return_json(false, "テーブル：$table カラム：$name のカラム名が正しくありません。");
             }
-            if ($type === 'KEY') {
+            if (strtoupper($type) === 'KEY') {
                 $column_defs[] = $name . ' INTEGER PRIMARY KEY AUTOINCREMENT';
             }
             else {
@@ -296,12 +403,37 @@ if ($command === 'MIGRATE') {
         catch(PDOException $e) {
             return_json(false, "SQLエラー：" . $e->getMessage());
         }
+
+        // 初期usersデータを追加する
+        if ($table === 'users' && defined('USERS_TABLE_DATA')) {
+            try {
+                foreach (USERS_TABLE_DATA as $row) {
+                    $stmt = $pdo->prepare('INSERT INTO users (username, password, email, created_at, updated_at) VALUES (?,?,?,?,?)');
+                    $stmt->execute([
+                        $row['username'],
+                        $row['password'],
+                        $row['email'],
+                        $now,
+                        $now
+                    ]);
+                }
+            }
+            catch(PDOException $e) {
+                return_json(false, "SQLエラー：" . $e->getMessage());
+            }
+        }
     }
 
     // 管理テーブルの作成
     try {
         if (!table_exists('jsonphp_sessions')) {
-            $pdo->exec('CREATE TABLE jsonphp_sessions (token TEXT UNIQUE, stamp TEXT)');
+            $pdo->exec('CREATE TABLE jsonphp_sessions ' .
+                '(' .
+                    'token TEXT UNIQUE NOT NULL, '.
+                    'user_id INTEGER NOT NULL, '.
+                    'stamp TEXT NOT NULL, '.
+                    'FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE'.
+                ')');
         }
     }
     catch(PDOException $e) {
@@ -310,7 +442,9 @@ if ($command === 'MIGRATE') {
 
     return_json(true, []);
 }
+// ---------------------------------------------------------------------
 // 認証
+// ---------------------------------------------------------------------
 elseif ($command === 'AUTH') {
     $username = filter_input(INPUT_POST, 'username');
     $password = filter_input(INPUT_POST, 'password');
@@ -318,25 +452,38 @@ elseif ($command === 'AUTH') {
     if (!$username || !$password) {
         return_json(false, 'usernameまたはpasswordが指定されていません');
     }
-    foreach (AUTH as $auth) {
-        if (!isset($auth['username']) || !isset($auth['password'])) {
-            continue;
+
+    $stmt = $pdo->prepare('SELECT id,password FROM users WHERE username=?');
+    $stmt->execute([$username]);
+    $row = $stmt->fetch(PDO::FETCH_ASSOC);
+    if ($row && password_verify($password, $row['password'])) {
+        $token = get_user_token($row['id']);
+        if ($token) {
+            update_token($token);
         }
-        if ($auth['username'] === $username && $auth['password'] === $password) {
+        else {
             $token = bin2hex(openssl_random_pseudo_bytes(16));
-            add_token($token);
-            return_json(true, ['token' => $token]);
+            add_token($token, $row['id']);
         }
+        return_json(true, ['token' => $token]);
     }
-    // 認証失敗なら10秒待たせる
-    sleep(10);
+    // 認証失敗なら5秒待たせる
+    sleep(5);
     return_json(false, "usernameまたはpasswordが違います");
 }
-// その他コマンド
+// ---------------------------------------------------------------------
+// 取得・追加・更新・削除
+// ---------------------------------------------------------------------
 elseif ($command === 'GET' || $command === 'ADD' || $command === 'CHANGE' || $command === 'DELETE') {
+    // ---------------------------------------------------------------------
+    // 共通部分
+    // ---------------------------------------------------------------------
+
     // トークンのチェック
-    if (!is_token_valid()) {
-        sleep(10);
+    $user_id = get_user_id_by_token();
+    if (!$user_id) {
+        // トークンが不正なら5秒待たせる
+        sleep(5);
         return_json(false, 'トークンが正しくありません');
     }
     delete_old_token();
@@ -352,6 +499,9 @@ elseif ($command === 'GET' || $command === 'ADD' || $command === 'CHANGE' || $co
 
     $where = filter_input(INPUT_POST, 'where');
 
+    // ---------------------------------------------------------------------
+    // whereがある場合は
+    // ---------------------------------------------------------------------
     $wheres = [];
     $where_values = [];
     if ($where) {
@@ -370,9 +520,9 @@ elseif ($command === 'GET' || $command === 'ADD' || $command === 'CHANGE' || $co
                     // column名が正しくなければ次へ
                     continue;
                 }
-                $cond = $def['cond'];
+                $cond = strtoupper($def['cond']);
                 if (
-                    $cond !== '=' && $cond !== '!=' && $cond !== '<>' &&
+                    $cond !== '=' && $cond !== '!=' && $cond !== '<>' && $cond !== 'LIKE' &&
                     $cond !== '>' && $cond !== '<'  && $cond !== '>=' && $cond !== '<='
                 ) {
                     // 基本的な比較演算子だけ利用可。それ以外なら次へ
@@ -380,7 +530,7 @@ elseif ($command === 'GET' || $command === 'ADD' || $command === 'CHANGE' || $co
                 }
                 $value = @strval($def['value']);
 
-                $wheres[] = $def['column'] . $cond . ' ?';
+                $wheres[] = $def['column'] . ' ' . $cond . ' ?';
                 $where_values[] = $value;
             }
 
@@ -390,20 +540,37 @@ elseif ($command === 'GET' || $command === 'ADD' || $command === 'CHANGE' || $co
             }
         }
     }
-
+    // ---------------------------------------------------------------------
+    // GET
+    // ---------------------------------------------------------------------
     if ($command === 'GET') {
         $sql = "SELECT * FROM $table" . $where;
         exec_query($sql, $where_values);
     }
 
+    // ---------------------------------------------------------------------
+    // ADD
+    // ---------------------------------------------------------------------
     if ($command === 'ADD') {
         $columns = [];
         $values  = [];
         decompose_input_data($columns, $values);
+
+        if (!in_array('created_at', $columns) && has_column($table, 'created_at')) {
+            $columns[] = 'created_at';
+            $values[] = $now;
+        }
+        if (!in_array('updated_at', $columns) && has_column($table, 'updated_at')) {
+            $columns[] = 'updated_at';
+            $values[] = $now;
+        }
         $sql = "INSERT INTO $table (" . implode(',', $columns) . ") VALUES (" . implode(',', array_fill(0, count($columns), '?')) . ")";
         exec_query($sql, $values);
     }
 
+    // ---------------------------------------------------------------------
+    // CHANGE
+    // ---------------------------------------------------------------------
     if ($command === 'CHANGE') {
         $columns = [];
         $values  = [];
@@ -411,6 +578,11 @@ elseif ($command === 'GET' || $command === 'ADD' || $command === 'CHANGE' || $co
 
         if (!$columns) {
             return_json(false, "アップデートするカラムがありません");
+        }
+
+        if (!in_array('updated_at', $columns) && has_column($table, 'updated_at')) {
+            $columns[] = 'updated_at';
+            $values[] = $now;
         }
 
         $fields = [];    
@@ -422,11 +594,27 @@ elseif ($command === 'GET' || $command === 'ADD' || $command === 'CHANGE' || $co
         exec_query($sql, $values);
     }
 
+    // ---------------------------------------------------------------------
+    // DELETE
+    // ---------------------------------------------------------------------
     if ($command === 'DELETE') {
         $sql = "DELETE FROM $table" . $where;
         exec_query($sql, $where_values);
     }
 }
+// ---------------------------------------------------------------------
+// パスワードのハッシュを返す
+// ---------------------------------------------------------------------
+elseif ($command === 'HASH') {
+    $password = filter_input(INPUT_GET, 'password');
+    if (!$password) {
+        return_json(false, 'passwordパラメータを指定してください');
+    }
+    return_json(true, ['hash' => password_hash($password, PASSWORD_DEFAULT )]);
+}
+// ---------------------------------------------------------------------
+// コマンドエラー
+// ---------------------------------------------------------------------
 else {
     return_json(false, "コマンドエラー");
 }

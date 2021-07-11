@@ -2,7 +2,8 @@
 
 ## 概要
 
-ポートフォリオサイトを作る時などに、簡易なAPIサーバがあると便利なのではないかと思い、作成しました。
+ポートフォリオサイトを作る時などに、簡易なAPIサーバがあると便利なのではないかと思い、作成しました。  
+安価な「さくらインターネット」で利用することを前提にしてますが、その他の環境でも動くはずです。
 
 ## インストール
 
@@ -22,12 +23,18 @@ php -S 127.0.0.1:3000 json.php
 ### アプリケーションの設定
 
 `json.php` ファイルの先頭部分に `define` がありますが、それを変更します。
-`HOME` をコメントアウトすると、ホームディレクトリ直下の `jsonphp` ディレクトリを使うようになります。  
-さくらのレンタルサーバーの場合は、 `HOME` をコメントアウトすると簡単です。  
-`jsonphp` ディレクトリはアプリケーションから書き込めるように権限を設定してください。
 
-`AUTH` は認証するための情報です。既存のものは変更してください。  
-複数行書くことで追加出来ます。
+- `HOME`
+   - `HOME` をコメントアウトすると、ホームディレクトリ直下の `jsonphp` ディレクトリを使うようになります。  
+さくらのレンタルサーバーの場合は、 `HOME` をコメントアウトすると簡単です。  
+`jsonphp` ディレクトリはアプリケーションから書き込めるように権限を設定してください。  
+またこのディレクトリは **Webからアクセスできない安全なところ** を指定してください。
+- `EXPIRATION`
+    - トークンの有効期限です。この有効期限が切れたトークンは次のアクセス時に削除されます。
+- `USERS_TABLE_DATA`
+    - 認証用の `users` テーブルの初期データです。マイグレーション時に使います。
+- `その他の定数`
+    - ファイル名やディレクトリ名です。必要が無ければ書き換えないことをお勧めします。
 
 ### データベースの設定
 
@@ -36,33 +43,48 @@ php -S 127.0.0.1:3000 json.php
 マイグレーションは指定のテーブルが存在する場合は、スキップされます。  
 再作成したい場合は、 `DROP TABLE` してください。
 
-例：以下のマイグレーションファイルでは二つのテーブルを作成します。
+例：
 
 ```
 {
     "books": {
         "id": "KEY",
+        "user_id": "INTEGER",
         "name": "TEXT",
         "price": "INTEGER",
         "created_at": "TEXT",
-        "updated_at": "TEXT"
-    },
-    "users": {
-        "id": "KEY",
-        "name": "TEXT",
-        "email": "TEXT",
-        "password": "TEXT",
-        "created_at": "TEXT",
-        "updated_at": "TEXT"
+        "updated_at": "TEXT",
+        "FOREIGN": "KEY (user_id) REFERENCES users(id) ON DELETE CASCADE"
     }
 }
 ```
 
 最初のオブジェクトのキーがテーブル名、値がテーブル定義です。  
 テーブル定義の中のキーがカラム名、値がカラムタイプです。  
-カラムタイプは4種類、 `KEY` （自動インクリメントのINTEGER）、 `TEXT` 、 `INTEGER` 、 `REAL` です。  
-`BLOB` は使えません。エンコードして `TEXT` として扱いましょう。  
-簡略化するためにリレーションは設定できません。
+カラムタイプで `KEY` は `INTEGER PRIMARY KEY AUTOINCREMENT` に置き換えられます。  
+最後の行でちょっと強引ですが、リレーションの設定をしています。  
+あまり複雑なことをせず、この程度で収めてください。
+
+マイグレーション時に `users` テーブルを作り、初期のユーザーを登録します。  
+最初に登録したいユーザーがいたら、 `USERS_TABLE_DATA` に設定してください。
+
+## リポジトリのファイルの説明
+
+- `json.php`
+    - 本体。この中で設置するのはこれだけです。
+- `jsonphp.js`
+    - Javascriptから簡単に使うことを目指したモジュールです。
+- `migrate.json`
+    - マイグレーションファイルのサンプル
+- `sample.html`
+    - Javascriptからのアクセスサンプル。 `jsonphp.js` を使っています。
+
+## 認証
+
+- `users` テーブルで認証します。
+- パスワードはハッシュしてください。ハッシュの作成は「利用方法」をご覧ください。
+
+
 
 ## 利用方法
 
@@ -86,7 +108,7 @@ http://example.com/json.php に設置されていると仮定します。
 ### 認証
 
 - http://example.com/json.php?cmd=auth
-- METHOD: POST  
+- METHOD: POST
 - DATA:
     - `username` （必須）
     - `password` （必須）
@@ -104,7 +126,7 @@ http://example.com/json.php に設置されていると仮定します。
 ### データ追加
 
 - http://example.com/json.php?cmd=add&table=books
-- METHOD: POST  
+- METHOD: POST
 - DATA:
     - `token` （必須）
     - `data` （必須）
@@ -121,7 +143,7 @@ http://example.com/json.php に設置されていると仮定します。
 ### データ更新
 
 - http://example.com/json.php?cmd=change&table=books
-- METHOD: POST  
+- METHOD: POST
 - DATA:
     - `token` （必須）
     - `where` （オプション）配列で複数指定するとAND検索
@@ -140,7 +162,7 @@ http://example.com/json.php に設置されていると仮定します。
 ### データの削除
 
 - http://example.com/json.php?cmd=delete&table=books
-- METHOD: POST  
+- METHOD: POST
 - DATA:
     - `token` （必須）
     - `where` （オプション）
@@ -157,7 +179,7 @@ http://example.com/json.php に設置されていると仮定します。
 ### データの取得
 
 - http://example.com/json.php?cmd=get&table=books
-- METHOD: POST  
+- METHOD: POST
 - DATA:
     - `token` （必須）
     - `where` （オプション）
@@ -183,11 +205,22 @@ http://example.com/json.php に設置されていると仮定します。
 
 - `column` ：カラム名
 - `cond` ：比較演算子
-    - `=` `!=` `<>` `>` `<` `>=` `<=` の7種類
+    - `=` `!=` `<>` `>` `<` `>=` `<=` `LIKE` の8種類
 - `value` ：値
 
-## ファイル
+### ハッシュの作成
 
-- `json.php` 本体。この中で設置するのはこれだけです。
-- `migrate.json` マイグレーションファイルのサンプル
-- `sample.html` Javascriptからのアクセスサンプル
+- http://example.com/json.php?cmd=hash&password=ハッシュしたい文字
+- METHOD: GET
+- 返されるJSON例
+
+```
+{
+    "result": true,
+    "data": [
+        {
+            "hash": "$2y$10$OEavWEQnX13A7Gg0WPy6ruWEZhK3bgoOaOo24U7g9RDoa1Ki7L6Ne",
+        }
+    ]
+}
+```
