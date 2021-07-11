@@ -43,7 +43,7 @@ define('USERS_TABLE_DEF', [
 /**
  * 初期設定
  */
-ini_set('display_errors', 1);
+ini_set('display_errors', 0);
 header('Content-type: application/json; charset=utf-8');
 
 // 現在の日時
