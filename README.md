@@ -74,6 +74,8 @@ php -S 127.0.0.1:3000 json.php
     - 本体。この中で設置するのはこれだけです。
 - `jsonphp.js`
     - Javascriptから簡単に使うことを目指したモジュールです。
+- `jsonphp.js.md`
+    - `jsonphp.js` の [使い方](./jsonphp.js.md) です。
 - `migrate.json`
     - マイグレーションファイルのサンプル
 - `sample.html`
