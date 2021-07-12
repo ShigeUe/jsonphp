@@ -54,13 +54,51 @@ JsonPHP.setToken(token);
 token = await JsonPHP.auth(username, password);
 ```
 
-#### データの取得
+#### where・orWhereメソッド
 
-`get` メソッドの引数は検索用のパラメータです。`[カラム,検索条件,値]` という配列です。  
-`[[カラム,検索条件,値],[カラム,検索条件,値]]` という感じで指定すると `AND` 検索になります。
+`where` メソッドの引数は検索用のパラメータです。`[カラム,検索条件,値]` という配列 または 3つの引数で指定します。  
+`where` メソッドを複数回呼び出すと、 `AND` 条件になります。
+
+例：
 
 ```
-data = await JsonPHP.table('books').get(['id', '=', 10]);
+data = await JsonPHP.table('books').where('id', '=', 10).get();
+```
+
+`orWhere` メソッドは二つ以上指定すると `OR` 条件になります。 `orWhere` メソッドで指定した条件だけが `OR` になり、その他は `AND` で結合されます。
+
+例：
+
+```
+data = await JsonPHP
+    .table('books')
+    .where('user_id','=',1)
+    .orWhere('price','<',1000)
+    .orWhere('price','>',90000)
+    .get();
+
+// user_id = 1 AND (price < 1000 OR price > 90000)
+```
+
+`orWhere` メソッドが一つだけだと `AND` 条件と変わりません。
+
+例：
+
+```
+data = await JsonPHP
+    .table('books')
+    .where('user_id','=',1)
+    .orWhere('price','<',1000)
+    .get();
+
+// user_id = 1 AND (price < 1000)
+```
+
+#### データの取得
+
+```
+// 以下の例では全件取得
+data = await JsonPHP.table('books').get();
 ```
 
 #### データの追加
@@ -78,7 +116,7 @@ await JsonPHP.table('books').add({user_id: 1, name: 'PHPマニュアル', price:
 第二引数は `get` メソッドと同じ検索用のパラメータです。
 
 ```
-await JsonPHP.table('books').change({price: 3900}, ['id', '=', 22]);
+await JsonPHP.table('books').where('id', '=', 22).change({price: 3900});
 ```
 
 #### データの削除
@@ -87,5 +125,5 @@ await JsonPHP.table('books').change({price: 3900}, ['id', '=', 22]);
 引数を与えないと全件削除します。ご注意ください。
 
 ```
-await JsonPHP.table('books').delete(['id', '=', 22]);
+await JsonPHP.table('books').where('id', '=', 22).delete();
 ```

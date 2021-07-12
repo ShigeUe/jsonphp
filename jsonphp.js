@@ -80,13 +80,15 @@ class JsonPHP {
     // インスタンス用
     // -------------------------------------------------------------------------
 
-    table = null;
+    _table = null;
+    _where = [];
+    _orWhere = [];
 
     constructor(table) {
         if (!JsonPHP.token) {
             throw 'ログインするかtokenをセットしてください';
         }
-        this.table = table;
+        this._table = table;
     }
 
     arrayToWhere(arr) {
@@ -109,8 +111,55 @@ class JsonPHP {
         return ret;
     }
 
-    async fetch(mode, params) {
-        const res = await fetch(JsonPHP.url + "?cmd=" + mode + "&table=" + this.table, params);
+    where(cond, ss, value) {
+        if (typeof cond === 'object' && cond.constructor.name === 'Array') {
+            this._where.push(cond);
+        }
+        else {
+            this._where.push([cond, ss, value]);
+        }
+        return this;
+    }
+
+    orWhere(cond, ss, value) {
+        if (typeof cond === 'object' && cond.constructor.name === 'Array') {
+            this._orWhere.push(cond);
+        }
+        else {
+            this._orWhere.push([cond, ss, value]);
+        }
+        return this;
+    }
+
+    addWhereToBody(body) {
+        let where = [];
+        if (this._orWhere.length) {
+            if (this._orWhere.length === 1) {
+                this._where = this._where.concat(this._orWhere);
+            }
+            else if (this._orWhere.length > 1) {
+                where.push({ OR: this.arrayToWhere(this._orWhere) });
+            }
+        }
+        if (this._where.length) {
+            where = where.concat(this.arrayToWhere(this._where));
+        }
+        if (where.length) {
+            body.where = JSON.stringify(where);
+        }
+        this._where = [];
+        this._orWhere = [];
+    }
+
+    async fetch(mode, body) {
+
+        body.token = JsonPHP.token;
+
+        const params = {};
+        params.method = 'POST';
+        params.body = JsonPHP.make_fd(body);
+
+        const res = await fetch(JsonPHP.url + "?cmd=" + mode + "&table=" + this._table, params);
         const ret = await res.json();
 
         if (ret.result) {
@@ -121,63 +170,29 @@ class JsonPHP {
         }
     }
 
-    async get(where) {
-        const params = {};
-        params.method = 'POST';
-
-        const body = {
-            token: JsonPHP.token
-        };
-        if (typeof where === 'object' && where.constructor.name === 'Array') {
-            body.where = JSON.stringify(this.arrayToWhere(where));
-        }
-        params.body = JsonPHP.make_fd(body);
-
-        return this.fetch("get", params);
+    async get() {
+        const body = {};
+        this.addWhereToBody(body);
+        return this.fetch("get", body);
     }
 
     async add(data) {
-        const params = {};
-        params.method = 'POST';
-
-        const body = {
-            token: JsonPHP.token
-        };
+        const body = {};
         body.data = JSON.stringify(data);
-        params.body = JsonPHP.make_fd(body);
-
-        return this.fetch("add", params);
+        return this.fetch("add", body);
     }
 
-    async change(data, where) {
-        const params = {};
-        params.method = 'POST';
-
-        const body = {
-            token: JsonPHP.token
-        };
+    async change(data) {
+        const body = {};
         body.data = JSON.stringify(data);
-        if (typeof where === 'object' && where.constructor.name === 'Array') {
-            body.where = JSON.stringify(this.arrayToWhere(where));
-        }
-        params.body = JsonPHP.make_fd(body);
-
-        return this.fetch("change", params);
+        this.addWhereToBody(body);
+        return this.fetch("change", body);
     }
 
-    async delete(where) {
-        const params = {};
-        params.method = 'POST';
-
-        const body = {
-            token: JsonPHP.token
-        };
-        if (typeof where === 'object' && where.constructor.name === 'Array') {
-            body.where = JSON.stringify(this.arrayToWhere(where));
-        }
-        params.body = JsonPHP.make_fd(body);
-
-        return this.fetch("delete", params);
+    async delete() {
+        const body = {};
+        this.addWhereToBody(body);
+        return this.fetch("delete", body);
     }
 }
 

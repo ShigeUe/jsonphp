@@ -209,6 +209,21 @@ http://example.com/json.php に設置されていると仮定します。
 - `cond` ：比較演算子
     - `=` `!=` `<>` `>` `<` `>=` `<=` `LIKE` の8種類
 - `value` ：値
+- `OR` を利用することも可能
+
+例：
+
+```
+[
+    {
+        OR: [
+            { column: price, cond: "<", value: 1000 },
+            { column: price, cond: ">", value: 90000 }
+        ]
+    },
+    { column: user_id, cond:"=", value: 1 }
+]
+```
 
 ### ハッシュの作成
 

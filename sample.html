@@ -213,7 +213,7 @@ document.getElementById('CHANGE').addEventListener('click', async () => {
     }
 
     try {
-        await JsonPHP.table('books').change(data, where);
+        await JsonPHP.table('books').where(where).change(data);
         form.reset();
         document.getElementById('GET').dispatchEvent(new Event('click'));
     }
@@ -226,7 +226,7 @@ document.getElementById('DELETE').addEventListener('click', async () => {
     const form = document.getElementById('delete_form');
 
     try {
-        await JsonPHP.table('books').delete(['id', '=', form.id.value]);
+        await JsonPHP.table('books').where('id', '=', form.id.value).delete();
         form.reset();
         document.getElementById('GET').dispatchEvent(new Event('click'));
     }
@@ -238,16 +238,19 @@ document.getElementById('DELETE').addEventListener('click', async () => {
 document.getElementById('GET').addEventListener('click', async () => {
     const get_id = document.getElementById('get_id').value;
     const get_name = document.getElementById('get_name').value;
-    let where;
+
+    const JPHP = JsonPHP.table('books');
+
+
     if (get_id != '') {
-        where = ['id', '=', get_id];
+        JPHP.where('id', '=', get_id);
     }
     else if (get_name != '') {
-        where = ['name', 'like', get_name];
+        JPHP.where('name', 'like', get_name);
     }
 
-    try {
-        const ret = await JsonPHP.table('books').get(where);
+    // try {
+        const ret = await JPHP.get();
         if (ret) {
             const RESULT = document.getElementById('RESULT');
 
@@ -285,10 +288,10 @@ document.getElementById('GET').addEventListener('click', async () => {
             table.appendChild(tbody);
             RESULT.appendChild(table);
         }
-    }
-    catch(e) {
-        alert(e);
-    }
+    // }
+    // catch(e) {
+    //     alert(e);
+    // }
 });
 // 結果をクリア
 document.getElementById('CLEAR').addEventListener('click', async () => {

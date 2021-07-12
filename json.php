@@ -43,7 +43,7 @@ define('USERS_TABLE_DEF', [
 /**
  * 初期設定
  */
-ini_set('display_errors', 0);
+ini_set('display_errors', 1);
 header('Content-type: application/json; charset=utf-8');
 
 // 現在の日時
@@ -188,9 +188,9 @@ function decompose_input_data(&$columns, &$values) {
  * SQLを発行してJSONを出力します。
  * 
  * @param string $sql
- * @param array $values
+ * @param array $binds
  */
-function exec_query($sql, $values) {
+function exec_query($sql, $binds) {
     global $pdo;
 
     $rows = [];
@@ -198,7 +198,18 @@ function exec_query($sql, $values) {
         $pdo->beginTransaction();
 
         $stmt = $pdo->prepare($sql);
-        $stmt->execute($values);
+
+        // $bindsが通常の配列なら、executeに直接渡す
+        if (is_vector($binds)) {
+            $stmt->execute($binds);
+        }
+        else {
+            foreach ($binds as $param => $value) {
+                $stmt->bindValue($param, $value);
+            }
+            $stmt->execute();
+        }
+
         // 実行するSQLがSELECTだったら、値を返す
         if (substr($sql, 0, 6) === 'SELECT') {
             $rows = $stmt->fetchAll(PDO::FETCH_ASSOC);
@@ -328,6 +339,75 @@ function delete_old_token() {
     }
     $pdo->commit();
 }
+
+/**
+ * make_where_condition
+ * 複雑なwhere条件を作る
+ * 
+ * @param array $bind 参照形式
+ * @return string SQL
+ * 
+ */
+function make_where_condition(array &$bind, $cond = []) {
+    if (!$cond) {
+        $where = filter_input(INPUT_POST, 'where');
+        if (!$where) {
+            return '';
+        }
+        $cond = json_decode($where, true);
+        if (!is_vector($cond)) {
+            $cond = [$cond];
+        }
+        $rets = [];
+        foreach ($cond as $c) {
+            $rets[] = make_where_condition($bind, $c);
+        }
+        return $rets ? ' WHERE ' . implode(' AND ', $rets) : '';
+    }
+    else {
+        if (isset($cond['OR'])) {
+            if (count($cond['OR']) < 2) {
+                throw new Error('ORは二つ以上条件が必要です');
+            }
+            $rets = [];
+            foreach ($cond['OR'] as $c) {
+                $rets[] = make_where_condition($bind, $c);
+            }
+            return '(' . implode(' OR ', $rets) . ')';
+        }
+        else {
+            if (!isset($cond['column']) || !isset($cond['cond']) || !isset($cond['value'])) {
+                throw new Error('Whereの条件が不正です');
+            }
+            if (!is_column_name_valid($cond['column'])) {
+                throw new Error('Whereのカラム名が不正です');
+            }
+            $ss = strtoupper($cond['cond']);
+            if (
+                $ss !== '=' && $ss !== '!=' && $ss !== '<>' && $ss !== 'LIKE' &&
+                $ss !== '>' && $ss !== '<'  && $ss !== '>=' && $ss !== '<='
+            ) {
+                throw new Error('Whereの比較演算子が不正です。');
+            }
+            $count = count($bind) + 1;
+            $param = ':PHPBIND' . sprintf('%03d', $count);
+            $bind[$param] =  @strval($cond['value']);
+
+            return $cond['column'] . ' ' . $ss . ' ' . $param;
+        }
+    }
+}
+
+
+
+
+
+
+
+
+
+
+
 
 
 
@@ -497,55 +577,18 @@ elseif ($command === 'GET' || $command === 'ADD' || $command === 'CHANGE' || $co
         return_json(false, 'テーブル名が正しくありません');
     }
 
-    $where = filter_input(INPUT_POST, 'where');
-
     // ---------------------------------------------------------------------
-    // whereがある場合は
+    // whereがある場合は設定される
     // ---------------------------------------------------------------------
-    $wheres = [];
-    $where_values = [];
-    if ($where) {
-        $where = json_decode($where, true);
-        if ($where) {
-            // 一つしか条件が無いときでも強制的に配列にする
-            if (!is_vector($where)) {
-                $where = [$where];
-            }
-            foreach ($where as $def) {
-                if (!isset($def['column']) || !isset($def['cond']) || !isset($def['value'])) {
-                    // whereの定義が全部あるかチェック。なければ次へ
-                    continue;
-                }
-                if (!is_column_name_valid($def['column'])) {
-                    // column名が正しくなければ次へ
-                    continue;
-                }
-                $cond = strtoupper($def['cond']);
-                if (
-                    $cond !== '=' && $cond !== '!=' && $cond !== '<>' && $cond !== 'LIKE' &&
-                    $cond !== '>' && $cond !== '<'  && $cond !== '>=' && $cond !== '<='
-                ) {
-                    // 基本的な比較演算子だけ利用可。それ以外なら次へ
-                    continue;
-                }
-                $value = @strval($def['value']);
+    $bind = [];
+    $where = make_where_condition($bind);
 
-                $wheres[] = $def['column'] . ' ' . $cond . ' ?';
-                $where_values[] = $value;
-            }
-
-            $where = '';
-            if ($wheres) {
-                $where = " WHERE " . implode(' AND ', $wheres);
-            }
-        }
-    }
     // ---------------------------------------------------------------------
     // GET
     // ---------------------------------------------------------------------
     if ($command === 'GET') {
         $sql = "SELECT * FROM $table" . $where;
-        exec_query($sql, $where_values);
+        exec_query($sql, $bind);
     }
 
     // ---------------------------------------------------------------------
@@ -585,13 +628,14 @@ elseif ($command === 'GET' || $command === 'ADD' || $command === 'CHANGE' || $co
             $values[] = $now;
         }
 
-        $fields = [];    
-        foreach ($columns as $column) {
-            $fields[] = $column . "=?";
+        $fields = []; $params = [];
+        foreach ($columns as $i => $column) {
+            $param = ":PHPUPDATE" . sprintf('%03d', $i+1);
+            $fields[] = $column . '=' . $param;
+            $params[$param] = $values[$i];
         }
         $sql = "UPDATE $table SET " . implode(',', $fields) . $where;
-        $values = array_merge($values, $where_values);
-        exec_query($sql, $values);
+        exec_query($sql, array_merge($params,$bind));
     }
 
     // ---------------------------------------------------------------------
@@ -599,7 +643,7 @@ elseif ($command === 'GET' || $command === 'ADD' || $command === 'CHANGE' || $co
     // ---------------------------------------------------------------------
     if ($command === 'DELETE') {
         $sql = "DELETE FROM $table" . $where;
-        exec_query($sql, $where_values);
+        exec_query($sql, $bind);
     }
 }
 // ---------------------------------------------------------------------
