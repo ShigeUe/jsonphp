@@ -249,7 +249,7 @@ document.getElementById('GET').addEventListener('click', async () => {
         JPHP.where('name', 'like', get_name);
     }
 
-    // try {
+    try {
         const ret = await JPHP.get();
         if (ret) {
             const RESULT = document.getElementById('RESULT');
@@ -258,6 +258,7 @@ document.getElementById('GET').addEventListener('click', async () => {
                 RESULT.innerHTML = 'NO DATA';
                 return;
             }
+            // HTMLでテーブルの作成 -------------------------------------------
             const table = document.createElement('table');
             const tbody = document.createElement('tbody');
             table.border = "1";
@@ -287,11 +288,12 @@ document.getElementById('GET').addEventListener('click', async () => {
             RESULT.innerHTML = '';
             table.appendChild(tbody);
             RESULT.appendChild(table);
+            // HTMLでテーブルの作成 おわり-------------------------------------
         }
-    // }
-    // catch(e) {
-    //     alert(e);
-    // }
+    }
+    catch(e) {
+        alert(e);
+    }
 });
 // 結果をクリア
 document.getElementById('CLEAR').addEventListener('click', async () => {

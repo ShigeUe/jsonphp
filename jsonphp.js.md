@@ -2,6 +2,12 @@
 
 ## 利用方法
 
+- ブラウザのセキュリティ上、同一ドメインから以外のアクセス出来ないようになっています。
+- [Fetch API](https://developer.mozilla.org/ja/docs/Web/API/Fetch_API) を利用していますので、モダンブラウザ以外（IE11）では動作しません。
+- チェックはChromeとFirefoxでのみ行っています。
+
+&nbsp;
+
 ### import
 
 ```
@@ -15,6 +21,8 @@ import { JsonPHP } from './jsonphp.js';
 // json.phpにアクセスするURLを設定します。
 JsonPHP.init({ url: 'https://example.com/json.php' });
 ```
+
+&nbsp;
 
 ### リファレンス
 
