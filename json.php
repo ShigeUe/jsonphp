@@ -596,10 +596,24 @@ elseif ($command === 'GET' || $command === 'ADD' || $command === 'CHANGE' || $co
     $where = make_where_condition($bind);
 
     // ---------------------------------------------------------------------
+    // orderがある場合は設定される
+    // ---------------------------------------------------------------------
+    $orderBy = [];
+    $order = filter_input(INPUT_POST, 'order');
+    if ($order) {
+        $orderBy = json_decode($order, true);
+    }
+    $orderBy = implode(',', $orderBy);
+    $orderBy = $orderBy ? ' ORDER BY '.$orderBy : '';
+
+
+
+
+    // ---------------------------------------------------------------------
     // GET
     // ---------------------------------------------------------------------
     if ($command === 'GET') {
-        $sql = "SELECT * FROM $table" . $where;
+        $sql = "SELECT * FROM $table" . $where . $orderBy;
         exec_query($sql, $bind);
     }
 

@@ -81,6 +81,7 @@ class JsonPHP {
     // -------------------------------------------------------------------------
 
     _table = null;
+    _order = [];
     _where = [];
     _orWhere = [];
 
@@ -111,24 +112,40 @@ class JsonPHP {
         return ret;
     }
 
-    where(cond, ss, value) {
-        if (typeof cond === 'object' && cond.constructor.name === 'Array') {
-            this._where.push(cond);
+    where(...cond) {
+        if (typeof cond[0] === 'object' && cond[0].constructor.name === 'Array') {
+            this._where.push(cond[0]);
         }
         else {
-            this._where.push([cond, ss, value]);
+            this._where.push([cond[0],cond[1],cond[2]]);
         }
         return this;
     }
 
-    orWhere(cond, ss, value) {
-        if (typeof cond === 'object' && cond.constructor.name === 'Array') {
-            this._orWhere.push(cond);
+    orWhere(...cond) {
+        if (typeof cond[0] === 'object' && cond[0].constructor.name === 'Array') {
+            this._orWhere.push(cond[0]);
         }
         else {
-            this._orWhere.push([cond, ss, value]);
+            this._orWhere.push([cond[0],cond[1],cond[2]]);
         }
         return this;
+    }
+
+    order(...orders) {
+        if (typeof orders[0] === 'object' && orders[0].constructor.name === 'Array') {
+            this._order.push(orders[0]);
+        }
+        else {
+            this._order = this._order.concat(orders);
+        }
+        return this;
+    }
+
+    addOrderByToBody(body) {
+        if (this._order.length) {
+            body.order = JSON.stringify(this._order);
+        }
     }
 
     addWhereToBody(body) {
@@ -173,6 +190,7 @@ class JsonPHP {
     async get() {
         const body = {};
         this.addWhereToBody(body);
+        this.addOrderByToBody(body);
         return this.fetch("get", body);
     }
 

@@ -3,7 +3,7 @@
 ## 利用方法
 
 - ブラウザのセキュリティ上、同一ドメインから以外のアクセス出来ないようになっています。
-- [Fetch API](https://developer.mozilla.org/ja/docs/Web/API/Fetch_API) を利用していますので、モダンブラウザ以外（IE11）では動作しません。
+- [Fetch API](https://developer.mozilla.org/ja/docs/Web/API/Fetch_API) などを利用していますので、モダンブラウザ以外（IE11）では動作しません。
 - チェックはChromeとFirefoxでのみ行っています。
 
 &nbsp;
@@ -100,6 +100,24 @@ data = await JsonPHP
     .get();
 
 // user_id = 1 AND (price < 1000)
+```
+
+#### 並べ替え（order by）
+
+`order` メソッドで並べ替えを指定できます。  
+複数引数か、配列で条件を与えます。
+
+例：
+
+```
+data = await JsonPHP
+    .table('books')
+    .where('price','>',1000)
+    .order('user_id', 'price DESC')
+    // or .order(['user_id', 'price DESC'])
+    .get();
+
+// ORDER BY user_id, price DESC
 ```
 
 #### データの取得

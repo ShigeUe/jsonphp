@@ -206,6 +206,8 @@ php -S 127.0.0.1:3000 json.php
     - `token` （必須）
     - `where` （オプション）
         - 例： `{"column":"price","cond":"<","value":3000}`
+    - `order` （オプション）
+        - 例： `["user_id","price DESC]`
 - 返されるJSON例
 
 ```
@@ -213,7 +215,16 @@ php -S 127.0.0.1:3000 json.php
     "result": true,
     "data": [
         {
+            "id": "4",
+            "user_id": "1",
+            "name": "リーダブルコード",
+            "price": "2400",
+            "created_at": "2020-02-02 03:04:50",
+            "updated_at": "2020-02-03 11:11:22"
+        },
+        {
             "id": "1",
+            "user_id": "1",
             "name": "日本の歴史",
             "price": "2250",
             "created_at": "2020-01-02 03:04:50",
