@@ -7,5 +7,6 @@
         "created_at": "TEXT",
         "updated_at": "TEXT",
         "FOREIGN": "KEY (user_id) REFERENCES users(id) ON DELETE CASCADE"
-    }
+    },
+    "user_meta": "CREATE TABLE user_meta (id INTEGER PRIMARY KEY AUTOINCREMENT, user_id INTEGER, `key` TEXT NOT NULL, `value` TEXT, created_at TEXT, updated_at TEXT)"
 }

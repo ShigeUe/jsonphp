@@ -59,11 +59,25 @@ php -S 127.0.0.1:3000 json.php
 }
 ```
 
-最初のオブジェクトのキーがテーブル名、値がテーブル定義です。  
+ルートのオブジェクトのキーがテーブル名、値がテーブル定義です。  
 テーブル定義の中のキーがカラム名、値がカラムタイプです。  
 カラムタイプで `KEY` は `INTEGER PRIMARY KEY AUTOINCREMENT` に置き換えられます。  
 最後の行でちょっと強引ですが、リレーションの設定をしています。  
-あまり複雑なことをせず、この程度で収めてください。
+複雑なテーブルになる場合は、SQLを直接書く設定をご利用ください。
+
+&nbsp;
+
+ルートのオブジェクトの値を文字列にすると、直接SQLを書くことが出来ます。
+
+例：
+
+```
+{
+    "user_meta": "CREATE TABLE user_meta (id INTEGER PRIMARY KEY AUTOINCREMENT, user_id INTEGER, `key` TEXT NOT NULL, `value` TEXT, created_at TEXT, updated_at TEXT)"
+}
+```
+
+&nbsp;
 
 マイグレーション時に `users` テーブルを作り、初期のユーザーを登録します。  
 最初に登録したいユーザーがいたら、 `USERS_TABLE_DATA` に設定してください。

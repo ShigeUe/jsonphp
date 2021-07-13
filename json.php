@@ -398,6 +398,49 @@ function make_where_condition(array &$bind, $cond = []) {
     }
 }
 
+/**
+ * create_table
+ * 
+ */
+function create_table($table, $definitions) {
+    global $pdo;
+
+    if (table_exists($table)) {
+        // テーブルが存在していたら、何もしない
+        return;
+    }
+
+    if (is_string($definitions)) {
+        $sql = $definitions;
+    }
+    else {
+        $column_defs = [];
+        foreach ($definitions as $name => $type) {
+            // $typeは区切り文字だけは許さない
+            if (preg_match('/[,;]/', $type)) {
+                return_json(false, "テーブル：$table カラム：$name のカラムタイプに不正な文字があります");
+            }
+            if (!is_column_name_valid($name)) {
+                // nameが正しくない（英数+アンダースコア1～100文字）
+                return_json(false, "テーブル：$table カラム：$name のカラム名が正しくありません。");
+            }
+            if (strtoupper($type) === 'KEY') {
+                $column_defs[] = $name . ' INTEGER PRIMARY KEY AUTOINCREMENT';
+            }
+            else {
+                $column_defs[] = $name . ' ' . $type;
+            }
+        }
+        $sql = 'CREATE TABLE ' . $table . ' (' . implode(',', $column_defs) . ')';
+    }
+
+    try {
+        $pdo->exec($sql);
+    }
+    catch(PDOException $e) {
+        return_json(false, "SQLエラー：" . $e->getMessage());
+    }
+}
 
 
 
@@ -435,57 +478,22 @@ catch (PDOException $e) {
 // マイグレーション
 // ---------------------------------------------------------------------
 if ($command === 'MIGRATE') {
-    if (!file_exists(HOME . MIGRATE_FILENAME)) {
-        // 指定のマイグレーションファイルが無い
-        return_json(false, 'マイグレーションファイルがありません');
-    }
 
-    $migrate = file_get_contents(HOME . MIGRATE_FILENAME);
-    $table_defs = json_decode($migrate, true);
-    if (!$table_defs) {
-        // 正しくJSONでコードできない
-        return_json(false, '正しいマイグレーションファイルではありません');
-    }
+    // 管理テーブルの作成
+    $sql = 'CREATE TABLE jsonphp_sessions (' .
+        'token TEXT UNIQUE NOT NULL, '.
+        'user_id INTEGER NOT NULL, '.
+        'stamp TEXT NOT NULL, '.
+        'FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE'.
+    ')';
+    create_table('jsonphp_sessions', $sql);
 
+    // usersテーブルの作成
     if (defined('USERS_TABLE_DEF')) {
-        $table_defs['users'] = USERS_TABLE_DEF;
-    }
-    else {
-        return_json(false, 'usersテーブルの定義がありません');
-    }
-
-    foreach ($table_defs as $table => $columns) {
-        if (table_exists($table)) {
-            // テーブルが存在していたら、何もしない
-            continue;
-        }
-        $column_defs = [];
-        foreach ($columns as $name => $type) {
-            // $typeは区切り文字だけは許さない
-            if (preg_match('/[,;]/', $type)) {
-                return_json(false, "テーブル：$table カラム：$name のカラムタイプに不正な文字があります");
-            }
-            if (!is_column_name_valid($name)) {
-                // nameが正しくない（英数+アンダースコア1～100文字）
-                return_json(false, "テーブル：$table カラム：$name のカラム名が正しくありません。");
-            }
-            if (strtoupper($type) === 'KEY') {
-                $column_defs[] = $name . ' INTEGER PRIMARY KEY AUTOINCREMENT';
-            }
-            else {
-                $column_defs[] = $name . ' ' . $type;
-            }
-        }
-        $sql = 'CREATE TABLE ' . $table . ' (' . implode(',', $column_defs) . ')';
-        try {
-            $pdo->exec($sql);
-        }
-        catch(PDOException $e) {
-            return_json(false, "SQLエラー：" . $e->getMessage());
-        }
+        create_table('users', USERS_TABLE_DEF);
 
         // 初期usersデータを追加する
-        if ($table === 'users' && defined('USERS_TABLE_DATA')) {
+        if (defined('USERS_TABLE_DATA')) {
             try {
                 foreach (USERS_TABLE_DATA as $row) {
                     $stmt = $pdo->prepare('INSERT INTO users (username, password, email, created_at, updated_at) VALUES (?,?,?,?,?)');
@@ -503,21 +511,25 @@ if ($command === 'MIGRATE') {
             }
         }
     }
-
-    // 管理テーブルの作成
-    try {
-        if (!table_exists('jsonphp_sessions')) {
-            $pdo->exec('CREATE TABLE jsonphp_sessions ' .
-                '(' .
-                    'token TEXT UNIQUE NOT NULL, '.
-                    'user_id INTEGER NOT NULL, '.
-                    'stamp TEXT NOT NULL, '.
-                    'FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE'.
-                ')');
-        }
+    else {
+        return_json(false, 'usersテーブルの定義がありません');
     }
-    catch(PDOException $e) {
-        return_json(false, "SQLエラー：" . $e->getMessage());
+
+    if (!file_exists(HOME . MIGRATE_FILENAME)) {
+        // 指定のマイグレーションファイルが無い
+        return_json(false, 'マイグレーションファイルがありません');
+    }
+
+    $migrate = file_get_contents(HOME . MIGRATE_FILENAME);
+    $table_defs = json_decode($migrate, true);
+    if (!$table_defs) {
+        // 正しくJSONでコードできない
+        return_json(false, '正しいマイグレーションファイルではありません');
+    }
+
+    // マイグレーションファイルからの追加
+    foreach ($table_defs as $table => $columns) {
+        create_table($table, $columns);
     }
 
     return_json(true, []);
