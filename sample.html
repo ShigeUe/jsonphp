@@ -188,8 +188,9 @@ document.getElementById('ADD').addEventListener('click', () => {
     };
 
     JsonPHP.table('books').add(data)
-        .then(() => {
+        .then((r) => {
             form.reset();
+            console.log(r);
             document.getElementById('GET').dispatchEvent(new Event('click'));
         })
         .catch((e) => alert(e));
@@ -229,12 +230,11 @@ document.getElementById('DELETE').addEventListener('click', () => {
         .catch((e) => alert(ret.message));
 });
 // 取得
-document.getElementById('GET').addEventListener('click', () => {
+document.getElementById('GET').addEventListener('click', async () => {
     const get_id = document.getElementById('get_id').value;
     const get_name = document.getElementById('get_name').value;
 
-    const JPHP = JsonPHP.table('books');
-
+    const JPHP = JsonPHP.table('books').field('id', 'name', 'price', 'updated_at');
 
     if (get_id != '') {
         JPHP.where('id', '=', get_id);
@@ -243,7 +243,7 @@ document.getElementById('GET').addEventListener('click', () => {
         JPHP.where('name', 'like', get_name);
     }
 
-    JPHP.get()
+    const ret = JPHP.get()
         .then((ret) => {
             const RESULT = document.getElementById('RESULT');
 

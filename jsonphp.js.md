@@ -134,6 +134,22 @@ data = await JsonPHP
 // ORDER BY user_id, price DESC
 ```
 
+#### 取得フィールドの限定
+
+`field` メソッドで取得するフィールドを限定できます。
+複数引数か、配列で条件を与えます。
+
+例：
+
+```
+data = await JsonPHP
+    .table('books')
+    .field('id', 'name', 'price')
+    .get();
+
+// SELECT id,name,price FROM books;
+```
+
 #### データの取得
 
 ```

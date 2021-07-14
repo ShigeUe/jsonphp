@@ -36,8 +36,7 @@ export default class JsonPHP {
   static async fetch(url, param) {
     const res = await fetch(url, param);
     if (res.ok) {
-      const ret = await res.json();
-      return ret;
+      return res.json();
     }
 
     return {
@@ -87,6 +86,8 @@ export default class JsonPHP {
   // -------------------------------------------------------------------------
 
   $table = null;
+
+  $field = [];
 
   $order = [];
 
@@ -140,11 +141,27 @@ export default class JsonPHP {
 
   order(...orders) {
     if (typeof orders[0] === 'object' && orders[0].constructor.name === 'Array') {
-      this.$order.push(orders[0]);
+      this.$order = this.$order.concat(orders[0]);
     } else {
       this.$order = this.$order.concat(orders);
     }
     return this;
+  }
+
+  field(...fields) {
+    if (typeof fields[0] === 'object' && fields[0].constructor.name === 'Array') {
+      this.$field = this.$field.concat(fields[0]);
+    } else {
+      this.$field = this.$order.concat(fields);
+    }
+    return this;
+  }
+
+  addFieldByToBody(body) {
+    const ret = body;
+    if (this.$field.length) {
+      ret.field = JSON.stringify(this.$field);
+    }
   }
 
   addOrderByToBody(body) {
@@ -195,6 +212,7 @@ export default class JsonPHP {
     const body = {};
     this.addWhereToBody(body);
     this.addOrderByToBody(body);
+    this.addFieldByToBody(body);
     return this.fetch('get', body);
   }
 
@@ -217,6 +235,3 @@ export default class JsonPHP {
     return this.fetch('delete', body);
   }
 }
-
-// eslint-disable-next-line
-// export { JsonPHP };

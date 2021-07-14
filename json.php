@@ -43,7 +43,7 @@ define('USERS_TABLE_DEF', [
 /**
  * 初期設定
  */
-ini_set('display_errors', 1);
+ini_set('display_errors', 0);
 header('Content-type: application/json; charset=utf-8');
 
 // 現在の日時
@@ -213,6 +213,11 @@ function exec_query($sql, $binds) {
         // 実行するSQLがSELECTだったら、値を返す
         if (substr($sql, 0, 6) === 'SELECT') {
             $rows = $stmt->fetchAll(PDO::FETCH_ASSOC);
+        }
+        if (substr($sql, 0, 6) === 'INSERT') {
+            $rows = [
+                'id' => $pdo->lastInsertId()
+            ];
         }
     }
     catch(PDOException $e) {
@@ -606,6 +611,18 @@ elseif ($command === 'GET' || $command === 'ADD' || $command === 'CHANGE' || $co
     $orderBy = implode(',', $orderBy);
     $orderBy = $orderBy ? ' ORDER BY '.$orderBy : '';
 
+    // ---------------------------------------------------------------------
+    // fieldがある場合は設定される
+    // ---------------------------------------------------------------------
+    $fields = [];
+    $field = filter_input(INPUT_POST, 'field');
+    if ($field) {
+        $fields = json_decode($field, true);
+    }
+    $fields = implode(',', $fields);
+    $fields = $fields ? $fields : '*';
+
+
 
 
 
@@ -613,7 +630,7 @@ elseif ($command === 'GET' || $command === 'ADD' || $command === 'CHANGE' || $co
     // GET
     // ---------------------------------------------------------------------
     if ($command === 'GET') {
-        $sql = "SELECT * FROM $table" . $where . $orderBy;
+        $sql = "SELECT " . $fields . " FROM $table" . $where . $orderBy;
         exec_query($sql, $bind);
     }
 
