@@ -1,217 +1,222 @@
-class JsonPHP {
-    // -------------------------------------------------------------------------
-    // スタティック用
-    // -------------------------------------------------------------------------
+export default class JsonPHP {
+  // -------------------------------------------------------------------------
+  // スタティック用
+  // -------------------------------------------------------------------------
 
-    static token;
-    static url;
+  static token;
 
-    static init(options) {
-        if (typeof options === 'object') {
-            if (options.url) {
-                JsonPHP.url = options.url;
-            }
-        }
-        return JsonPHP;
+  static url;
+
+  static init(options) {
+    if (typeof options === 'object') {
+      if (options.url) {
+        JsonPHP.url = options.url;
+      }
+    }
+    return JsonPHP;
+  }
+
+  static makeFd(obj) {
+    const data = new FormData();
+    Object.keys(obj).forEach((el) => {
+      data.append(el, obj[el]);
+    });
+    return data;
+  }
+
+  static setToken(token) {
+    JsonPHP.token = token;
+    return JsonPHP;
+  }
+
+  static table(table) {
+    return new JsonPHP(table);
+  }
+
+  static async fetch(url, param) {
+    const res = await fetch(url, param);
+    if (res.ok) {
+      const ret = await res.json();
+      return ret;
     }
 
-    static make_fd(obj) {
-        const data = new FormData;
-        Object.keys(obj).forEach(el => {
-            data.append(el, obj[el]);
-        });
-        return data;
+    return {
+      result: false,
+      message: `接続できませんでした（${res.status}）`,
+    };
+  }
+
+  static async migrate() {
+    const ret = await JsonPHP.fetch(`${JsonPHP.url}?cmd=migrate`, {
+      method: 'GET',
+    });
+    if (ret.result) {
+      return true;
     }
+    throw ret.message;
+  }
 
-    static setToken(token) {
-        JsonPHP.token = token;
-        return JsonPHP;
+  static async auth(username, password) {
+    const params = {};
+    params.body = JsonPHP.makeFd({ username, password });
+    params.method = 'POST';
+
+    const ret = await JsonPHP.fetch(`${JsonPHP.url}?cmd=auth`, params);
+
+    if (ret.result) {
+      JsonPHP.token = ret.data.token;
+      return ret.data.token;
     }
+    throw ret.message;
+  }
 
-    static table(table) {
-        return new JsonPHP(table);
+  static async hash(password) {
+    const encodedPassword = encodeURIComponent(password);
+    const ret = await JsonPHP.fetch(`${JsonPHP.url}?cmd=hash&password=${encodedPassword}`, {
+      method: 'GET',
+    });
+
+    if (ret.result) {
+      return ret.data.hash;
     }
+    throw ret.message;
+  }
 
-    static async migrate() {
-        const res = await fetch(JsonPHP.url + "?cmd=migrate", {
-            method: "GET"
-        });
-        const ret = await res.json();
-        if (ret.result) {
-            return true;
-        }
-        else {
-            throw ret.message;
-        }
+  // -------------------------------------------------------------------------
+  // インスタンス用
+  // -------------------------------------------------------------------------
+
+  $table = null;
+
+  $order = [];
+
+  $where = [];
+
+  $orWhere = [];
+
+  constructor(table) {
+    if (!JsonPHP.token) {
+      throw new Error('ログインするかtokenをセットしてください');
     }
+    this.$table = table;
+  }
 
-    static async auth(username, password) {
-        const params = {};
-        params.body = JsonPHP.make_fd({ username, password });
-        params.method = "POST";
-
-        const res = await fetch(JsonPHP.url + "?cmd=auth", params);
-        const ret = await res.json();
-
-        if (ret.result) {
-            JsonPHP.token = ret.data.token;
-            return ret.data.token;
-        }
-        else {
-            throw ret.message;
-        }
+  arrayToWhere(arr) {
+    const ret = [];
+    if (typeof arr === 'object' && arr.constructor.name !== 'Array') {
+      return ret;
     }
-
-    static async hash(password) {
-        const res = await fetch(JsonPHP.url + "?cmd=hash&password=" + encodeURIComponent(password), {
-            method: "GET"
-        });
-        const ret = await res.json();
-
-        if (ret.result) {
-            return ret.data.hash;
-        }
-        else {
-            throw ret.message;
-        }
+    if (typeof arr[0] === 'object' && arr[0].constructor.name === 'Array') {
+      arr.forEach((a) => {
+        ret.push(this.arrayToWhere(a));
+      });
+    } else {
+      return {
+        column: arr[0],
+        cond: arr[1],
+        value: arr[2],
+      };
     }
+    return ret;
+  }
 
-    // -------------------------------------------------------------------------
-    // インスタンス用
-    // -------------------------------------------------------------------------
-
-    _table = null;
-    _order = [];
-    _where = [];
-    _orWhere = [];
-
-    constructor(table) {
-        if (!JsonPHP.token) {
-            throw 'ログインするかtokenをセットしてください';
-        }
-        this._table = table;
+  where(...cond) {
+    if (typeof cond[0] === 'object' && cond[0].constructor.name === 'Array') {
+      this.$where.push(cond[0]);
+    } else {
+      this.$where.push([cond[0], cond[1], cond[2]]);
     }
+    return this;
+  }
 
-    arrayToWhere(arr) {
-        const ret = [];
-        if (typeof arr === 'object' && arr.constructor.name !== 'Array') {
-            return ret;
-        }
-        if (typeof arr[0] === 'object' && arr[0].constructor.name === 'Array') {
-            arr.forEach(a => {
-                ret.push(this.arrayToWhere(a));
-            });
-        }
-        else {
-            return {
-                column: arr[0],
-                cond:   arr[1],
-                value:  arr[2]
-            };
-        }
-        return ret;
+  orWhere(...cond) {
+    if (typeof cond[0] === 'object' && cond[0].constructor.name === 'Array') {
+      this.$orWhere.push(cond[0]);
+    } else {
+      this.$orWhere.push([cond[0], cond[1], cond[2]]);
     }
+    return this;
+  }
 
-    where(...cond) {
-        if (typeof cond[0] === 'object' && cond[0].constructor.name === 'Array') {
-            this._where.push(cond[0]);
-        }
-        else {
-            this._where.push([cond[0],cond[1],cond[2]]);
-        }
-        return this;
+  order(...orders) {
+    if (typeof orders[0] === 'object' && orders[0].constructor.name === 'Array') {
+      this.$order.push(orders[0]);
+    } else {
+      this.$order = this.$order.concat(orders);
     }
+    return this;
+  }
 
-    orWhere(...cond) {
-        if (typeof cond[0] === 'object' && cond[0].constructor.name === 'Array') {
-            this._orWhere.push(cond[0]);
-        }
-        else {
-            this._orWhere.push([cond[0],cond[1],cond[2]]);
-        }
-        return this;
+  addOrderByToBody(body) {
+    const ret = body;
+    if (this.$order.length) {
+      ret.order = JSON.stringify(this.$order);
     }
+  }
 
-    order(...orders) {
-        if (typeof orders[0] === 'object' && orders[0].constructor.name === 'Array') {
-            this._order.push(orders[0]);
-        }
-        else {
-            this._order = this._order.concat(orders);
-        }
-        return this;
+  addWhereToBody(body) {
+    const ret = body;
+
+    let where = [];
+    if (this.$orWhere.length) {
+      if (this.$orWhere.length === 1) {
+        this.$where = this.$where.concat(this.$orWhere);
+      } else if (this.$orWhere.length > 1) {
+        where.push({ OR: this.arrayToWhere(this.$orWhere) });
+      }
     }
-
-    addOrderByToBody(body) {
-        if (this._order.length) {
-            body.order = JSON.stringify(this._order);
-        }
+    if (this.$where.length) {
+      where = where.concat(this.arrayToWhere(this.$where));
     }
-
-    addWhereToBody(body) {
-        let where = [];
-        if (this._orWhere.length) {
-            if (this._orWhere.length === 1) {
-                this._where = this._where.concat(this._orWhere);
-            }
-            else if (this._orWhere.length > 1) {
-                where.push({ OR: this.arrayToWhere(this._orWhere) });
-            }
-        }
-        if (this._where.length) {
-            where = where.concat(this.arrayToWhere(this._where));
-        }
-        if (where.length) {
-            body.where = JSON.stringify(where);
-        }
-        this._where = [];
-        this._orWhere = [];
+    if (where.length) {
+      ret.where = JSON.stringify(where);
     }
+    this.$where = [];
+    this.$orWhere = [];
+  }
 
-    async fetch(mode, body) {
+  async fetch(mode, body) {
+    const inputBody = body;
+    inputBody.token = JsonPHP.token;
 
-        body.token = JsonPHP.token;
+    const params = {};
+    params.method = 'POST';
+    params.body = JsonPHP.makeFd(inputBody);
 
-        const params = {};
-        params.method = 'POST';
-        params.body = JsonPHP.make_fd(body);
+    const ret = await JsonPHP.fetch(`${JsonPHP.url}?cmd=${mode}&table=${this.$table}`, params);
 
-        const res = await fetch(JsonPHP.url + "?cmd=" + mode + "&table=" + this._table, params);
-        const ret = await res.json();
-
-        if (ret.result) {
-            return ret.data;
-        }
-        else {
-            throw ret.message;
-        }
+    if (ret.result) {
+      return ret.data;
     }
+    throw ret.message;
+  }
 
-    async get() {
-        const body = {};
-        this.addWhereToBody(body);
-        this.addOrderByToBody(body);
-        return this.fetch("get", body);
-    }
+  async get() {
+    const body = {};
+    this.addWhereToBody(body);
+    this.addOrderByToBody(body);
+    return this.fetch('get', body);
+  }
 
-    async add(data) {
-        const body = {};
-        body.data = JSON.stringify(data);
-        return this.fetch("add", body);
-    }
+  async add(data) {
+    const body = {};
+    body.data = JSON.stringify(data);
+    return this.fetch('add', body);
+  }
 
-    async change(data) {
-        const body = {};
-        body.data = JSON.stringify(data);
-        this.addWhereToBody(body);
-        return this.fetch("change", body);
-    }
+  async change(data) {
+    const body = {};
+    body.data = JSON.stringify(data);
+    this.addWhereToBody(body);
+    return this.fetch('change', body);
+  }
 
-    async delete() {
-        const body = {};
-        this.addWhereToBody(body);
-        return this.fetch("delete", body);
-    }
+  async delete() {
+    const body = {};
+    this.addWhereToBody(body);
+    return this.fetch('delete', body);
+  }
 }
 
-export { JsonPHP };
+// eslint-disable-next-line
+// export { JsonPHP };

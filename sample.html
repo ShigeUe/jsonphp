@@ -158,28 +158,28 @@
         </div>
     </div>
 <script type="module">
-import { JsonPHP } from './jsonphp.js';
+import JsonPHP from './jsonphp.js';
 
 JsonPHP.init({url: './json.php'});
 
 // 認証
-document.getElementById('AUTH').addEventListener('click', async () => {
+document.getElementById('AUTH').addEventListener('click', () => {
     const form = document.getElementById('auth_form');
     const username = form.username.value;
     const password = form.password.value;
 
-    try {
-        const token = await JsonPHP.auth(username, password);
-        document.getElementById('token').value = token;
-        form.reset();
-        document.getElementById('GET').dispatchEvent(new Event('click'));
-    }
-    catch (e) {
-        alert(e);
-    }
+    JsonPHP.auth(username, password)
+        .then((token) => {
+            document.getElementById('token').value = token;
+            form.reset();
+            document.getElementById('GET').dispatchEvent(new Event('click'));
+        })
+        .catch((e) => {
+            alert(e);
+        });
 });
 // 追加
-document.getElementById('ADD').addEventListener('click', async () => {
+document.getElementById('ADD').addEventListener('click', () => {
     const form = document.getElementById('add_form');
     const data = {
         name: form.name.value,
@@ -187,17 +187,15 @@ document.getElementById('ADD').addEventListener('click', async () => {
         user_id: form.user_id.value,
     };
 
-    try {
-        await JsonPHP.table('books').add(data);
-        form.reset();
-        document.getElementById('GET').dispatchEvent(new Event('click'));
-    }
-    catch(e) {
-        alert(e);
-    }
+    JsonPHP.table('books').add(data)
+        .then(() => {
+            form.reset();
+            document.getElementById('GET').dispatchEvent(new Event('click'));
+        })
+        .catch((e) => alert(e));
 });
 // 更新
-document.getElementById('CHANGE').addEventListener('click', async () => {
+document.getElementById('CHANGE').addEventListener('click', () => {
     const form = document.getElementById('change_form');
     if (!form.id.value) {
         return;
@@ -212,30 +210,26 @@ document.getElementById('CHANGE').addEventListener('click', async () => {
         data.price = form.price.value;
     }
 
-    try {
-        await JsonPHP.table('books').where(where).change(data);
-        form.reset();
-        document.getElementById('GET').dispatchEvent(new Event('click'));
-    }
-    catch(e) {
-        alert(e);
-    }
+    JsonPHP.table('books').where(where).change(data)
+        .then(() => {
+            form.reset();
+            document.getElementById('GET').dispatchEvent(new Event('click'));
+        })
+        .catch((e) => alert(e));
 });
 // 削除
-document.getElementById('DELETE').addEventListener('click', async () => {
+document.getElementById('DELETE').addEventListener('click', () => {
     const form = document.getElementById('delete_form');
 
-    try {
-        await JsonPHP.table('books').where('id', '=', form.id.value).delete();
-        form.reset();
-        document.getElementById('GET').dispatchEvent(new Event('click'));
-    }
-    catch(e) {
-        alert(ret.message);
-    }
+    JsonPHP.table('books').where('id', '=', form.id.value).delete()
+        .then(() => {
+            form.reset();
+            document.getElementById('GET').dispatchEvent(new Event('click'));
+        })
+        .catch((e) => alert(ret.message));
 });
 // 取得
-document.getElementById('GET').addEventListener('click', async () => {
+document.getElementById('GET').addEventListener('click', () => {
     const get_id = document.getElementById('get_id').value;
     const get_name = document.getElementById('get_name').value;
 
@@ -249,9 +243,8 @@ document.getElementById('GET').addEventListener('click', async () => {
         JPHP.where('name', 'like', get_name);
     }
 
-    try {
-        const ret = await JPHP.get();
-        if (ret) {
+    JPHP.get()
+        .then((ret) => {
             const RESULT = document.getElementById('RESULT');
 
             if (ret.length <= 0) {
@@ -289,43 +282,36 @@ document.getElementById('GET').addEventListener('click', async () => {
             table.appendChild(tbody);
             RESULT.appendChild(table);
             // HTMLでテーブルの作成 おわり-------------------------------------
-        }
-    }
-    catch(e) {
-        alert(e);
-    }
+        })
+        .catch((e) => alert(e));
 });
 // 結果をクリア
-document.getElementById('CLEAR').addEventListener('click', async () => {
+document.getElementById('CLEAR').addEventListener('click', () => {
     document.getElementById('RESULT').innerHTML = '';
 });
 // マイグレーション
-document.getElementById('MIGRATE').addEventListener('click', async () => {
-    try {
-        await JsonPHP.migrate();
-        RESULT.innerText = "マイグレーション完了";
-    }
-    catch(e) {
-        alert(e);
-    }
+document.getElementById('MIGRATE').addEventListener('click', () => {
+    JsonPHP.migrate()
+        .then(() => {
+            RESULT.innerText = "マイグレーション完了";
+        })
+        .catch((e) => alert(e));
 });
 // パスワードハッシュ
-document.getElementById('HASH').addEventListener('click', async () => {
+document.getElementById('HASH').addEventListener('click', () => {
     const form = document.getElementById('hash_form');
     if (!form.password.value) {
         return;
     }
 
-    try {
-        const hash = await JsonPHP.hash(form.password.value);
-        RESULT.innerText = hash;
-    }
-    catch(e) {
-        alert(e);
-    }
+    JsonPHP.hash(form.password.value)
+        .then((hash) => {
+            RESULT.innerText = hash;
+        })
+        .catch((e) => alert(e));
 });
 // トークンをセット
-document.getElementById('SET_TOKEN').addEventListener('click', async () => {
+document.getElementById('SET_TOKEN').addEventListener('click', () => {
     const token = document.getElementById('token').value;
 
     if (token) {

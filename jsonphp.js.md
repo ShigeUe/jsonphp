@@ -29,7 +29,9 @@ JsonPHP.init({ url: 'https://example.com/json.php' });
 #### メソッドの失敗
 
 ほとんどのメソッドが失敗すると例外を送出します。  
-エラーメッセージが送られているので、 `catch` してください。  
+エラーメッセージが送られているので、 `catch` してください。
+
+もしくは `.then` と `.catch` を使って、エラーを補足してください。  
 詳しくは `sample.html` をご覧ください。
 
 #### マイグレーション
@@ -49,7 +51,7 @@ hash = await JsonPHP.hash(password);
 #### トークンのセット
 
 すでにログインしている場合、 `token` をJsonPHPにセットしてください。  
-このメソッドは `Promise` を返しません。
+このメソッドはJsonPHPを返しますので、メソッドチェーン出来ます。
 
 ```
 JsonPHP.setToken(token);
@@ -57,9 +59,21 @@ JsonPHP.setToken(token);
 
 #### ログイン
 
+このメソッドはトークンを返しますが、JsonPHP.tokenでも取り出せます。
+
 ```
-// このメソッドはトークンを返しますが、JsonPHP.tokenでも取り出せます。
 token = await JsonPHP.auth(username, password);
+```
+
+&nbsp;
+
+#### tableメソッド
+
+テーブルを特定し、JsonPHPのインスタンスを返します。  
+`where` 、`orWhere`, `order` 、 `get` 、 `add` 、 `change` 、 `delete` 、はメソッドチェーンで指定します。
+
+```
+instance = JsonPHP.table('books'); // JsonPHPのインスタンスを返します。
 ```
 
 #### where・orWhereメソッド
