@@ -8,77 +8,10 @@ export default class JsonPHP {
   static url;
 
   static init(options) {
-    if (typeof options === 'object') {
-      if (options.url) {
-        JsonPHP.url = options.url;
-      }
+    if (typeof options !== 'object' || !options.url) {
+      throw new Error('設定が正しくありません');
     }
-    return JsonPHP;
-  }
-
-  static makeFd(obj) {
-    const data = new FormData();
-    Object.keys(obj).forEach((el) => {
-      data.append(el, obj[el]);
-    });
-    return data;
-  }
-
-  static setToken(token) {
-    JsonPHP.token = token;
-    return JsonPHP;
-  }
-
-  static table(table) {
-    return new JsonPHP(table);
-  }
-
-  static async fetch(url, param) {
-    const res = await fetch(url, param);
-    if (res.ok) {
-      return res.json();
-    }
-
-    return {
-      result: false,
-      message: `接続できませんでした（${res.status}）`,
-    };
-  }
-
-  static async migrate() {
-    const ret = await JsonPHP.fetch(`${JsonPHP.url}?cmd=migrate`, {
-      method: 'GET',
-    });
-    if (ret.result) {
-      return true;
-    }
-    throw ret.message;
-  }
-
-  static async auth(username, password) {
-    const params = {};
-    params.body = JsonPHP.makeFd({ username, password });
-    params.method = 'POST';
-
-    const ret = await JsonPHP.fetch(`${JsonPHP.url}?cmd=auth`, params);
-
-    if (ret.result) {
-      JsonPHP.token = ret.data.token;
-      return ret.data.token;
-    }
-    throw ret.message;
-  }
-
-  static async hash(password) {
-    const encodedPassword = encodeURIComponent(password);
-    const ret = await JsonPHP.fetch(`${JsonPHP.url}?cmd=hash&password=${encodedPassword}`, {
-      method: 'GET',
-    });
-
-    if (ret.result) {
-      return ret.data.hash;
-    }
-    throw ret.message;
+    return new JsonPHP(options);
   }
 
   // -------------------------------------------------------------------------
@@ -95,11 +28,97 @@ export default class JsonPHP {
 
   $orWhere = [];
 
-  constructor(table) {
-    if (!JsonPHP.token) {
-      throw new Error('ログインするかtokenをセットしてください');
+  constructor(options) {
+    if (typeof options === 'object') {
+      this.init(options);
     }
+  }
+
+  init(options) {
+    if (typeof options === 'object') {
+      if (options.url) {
+        JsonPHP.url = options.url;
+      }
+    }
+  }
+
+  clearInstanceVars() {
+    this.$table = null;
+    this.$field = [];
+    this.$order = [];
+    this.$where = [];
+    this.$orWhere = [];
+  }
+
+  makeFd(obj) {
+    const data = new FormData();
+    Object.keys(obj).forEach((el) => {
+      data.append(el, obj[el]);
+    });
+    return data;
+  }
+
+  setToken(token) {
+    JsonPHP.token = token;
+    return this;
+  }
+
+  getToken(token) {
+    return JsonPHP.token;
+  }
+
+  table(table) {
+    this.clearInstanceVars();
     this.$table = table;
+    return this;
+  }
+
+  async $fetch(url, param) {
+    const res = await fetch(url, param);
+    if (res.ok) {
+      return res.json();
+    }
+
+    return {
+      result: false,
+      message: `接続できませんでした（${res.status}）`,
+    };
+  }
+
+  async migrate() {
+    const ret = await this.$fetch(`${JsonPHP.url}?cmd=migrate`, {
+      method: 'GET',
+    });
+    if (ret.result) {
+      return true;
+    }
+    throw ret.message;
+  }
+
+  async auth(username, password) {
+    const params = {};
+    params.body = this.makeFd({ username, password });
+    params.method = 'POST';
+
+    const ret = await this.$fetch(`${JsonPHP.url}?cmd=auth`, params);
+
+    if (ret.result) {
+      JsonPHP.token = ret.data.token;
+      return ret.data.token;
+    }
+    throw ret.message;
+  }
+
+  async hash(password) {
+    const encodedPassword = encodeURIComponent(password);
+    const ret = await this.$fetch(`${JsonPHP.url}?cmd=hash&password=${encodedPassword}`, {
+      method: 'GET',
+    });
+
+    if (ret.result) {
+      return ret.data.hash;
+    }
+    throw ret.message;
   }
 
   arrayToWhere(arr) {
@@ -198,9 +217,11 @@ export default class JsonPHP {
 
     const params = {};
     params.method = 'POST';
-    params.body = JsonPHP.makeFd(inputBody);
+    params.body = this.makeFd(inputBody);
 
-    const ret = await JsonPHP.fetch(`${JsonPHP.url}?cmd=${mode}&table=${this.$table}`, params);
+    const ret = await this.$fetch(`${JsonPHP.url}?cmd=${mode}&table=${this.$table}`, params);
+
+    this.clearInstanceVars();
 
     if (ret.result) {
       return ret.data;
@@ -222,11 +243,11 @@ export default class JsonPHP {
     return this.fetch('add', body);
   }
 
-  async change(data) {
+  async update(data) {
     const body = {};
     body.data = JSON.stringify(data);
     this.addWhereToBody(body);
-    return this.fetch('change', body);
+    return this.fetch('update', body);
   }
 
   async delete() {

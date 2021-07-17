@@ -17,8 +17,9 @@ define('EXPIRATION',       30);                // トークンの有効期限（
 // 認証に使うusersテーブルの初期データ
 define('USERS_TABLE_DATA', [
     [
-        "username" => 'testuser',
+        "username" => 'admin',
         "password" => '$2y$10$MqTUmfUeTltU1MLti5u3eOzE6qpVWQ6IWzxBouXPYn.WBqf.WPn66', // PassWord
+        "admin"    => 1, // 0=一般ユーザー、1=管理者。管理者に設定
         "email"    => 'admin@example.com'
     ]
 ]);
@@ -36,6 +37,7 @@ define('USERS_TABLE_DEF', [
     "username"   => "TEXT NOT NULL",
     "password"   => "TEXT NOT NULL",
     "email"      => "TEXT",
+    "admin"      => "INTEGER NOT NULL DEFAULT 0",
     "created_at" => "TEXT",
     "updated_at" => "TEXT",
 ]);
@@ -43,7 +45,7 @@ define('USERS_TABLE_DEF', [
 /**
  * 初期設定
  */
-ini_set('display_errors', 0);
+ini_set('display_errors', 1);
 header('Content-type: application/json; charset=utf-8');
 
 // 現在の日時
@@ -107,6 +109,9 @@ function table_exists($table_name) {
     return $row['count'] > 0;
 }
 
+// スキーマのバッファー
+$_schema_buffer = [];
+
 /**
  * get_schema
  * テーブルの構造を取得する
@@ -115,14 +120,21 @@ function table_exists($table_name) {
  * @return array テーブル構造
  */
 function get_schema($table) {
-    global $pdo;
+    global $pdo, $_schema_buffer;
 
     if (!table_exists($table)) {
         return [];
     }
+    if (in_array($table, $_schema_buffer)) {
+        return $_schema_buffer[$table];
+    }
     $stmt = $pdo->query("PRAGMA table_info('{$table}');");
     $rows = $stmt->fetchAll(PDO::FETCH_ASSOC);
+    if (!$rows) {
+        return_json(false, 'テーブルがありません（' . $table . '）');
+    }
 
+    $_schema_buffer[$table] = $rows;
     return $rows;
 }
 
@@ -164,6 +176,8 @@ function is_vector(array $arr) {
  * @param array $values  参照形式
  */
 function decompose_input_data(&$columns, &$values) {
+    global $auth_user, $table;
+
     $data = json_decode(filter_input(INPUT_POST, 'data'), true);
     if (!$data) {
         return;
@@ -181,6 +195,22 @@ function decompose_input_data(&$columns, &$values) {
         $columns[] = $column;
         $values[] = $value;
     }
+
+    if (!is_admin()) {
+        // 一般ユーザーなら
+        $pos = array_search('user_id', $columns);
+        if ($pos) {
+            // もし user_id が指定されていたら、自分のIDに変更する
+            $values[$pos] = $auth_user['id'];
+        }
+        elseif (has_column($table, 'user_id')) {
+            // user_idカラムを持っていたら、強制的にセット
+            $columns[] = 'user_id';
+            $values[] = $auth_user['id'];
+        }
+    }
+
+
 }
 
 /**
@@ -275,7 +305,7 @@ function get_user_token($user_id) {
  * get_user_id_by_token
  * tokenからuser_idを取得する。またtokenを更新する
  * 
- * @return bool
+ * @return array ユーザー情報
  */
 function get_user_id_by_token() {
     global $pdo;
@@ -285,25 +315,27 @@ function get_user_id_by_token() {
         return false;
     }
 
-    $user_id = false;
+    $user = false;
     try {
-        $stmt = $pdo->prepare('SELECT user_id,stamp FROM jsonphp_sessions WHERE token=?');
+        $stmt = $pdo->prepare('SELECT U.id, U.admin, J.stamp '. 
+            'FROM jsonphp_sessions AS J LEFT JOIN users AS U ON (J.user_id = U.id) '.
+            'WHERE J.token=? ');
         $stmt->execute([$token]);
         $row = $stmt->fetch(PDO::FETCH_ASSOC);
         if ($row && $row['stamp'] >= date('Y-m-d H:i:s', time() - EXPIRATION * 60)) {
-            $user_id = $row['user_id'];
+            $user = $row;
         }
     }
     catch(PDOException $e) {
         return_json(false, "SQLエラー：" . $e->getMessage());
     }
 
-    if ($user_id) {
+    if ($user) {
         if (!update_token($token)) {
             return_json(false, "トークンの更新エラー");
         }
     }
-    return $user_id;
+    return $user;
 }
 
 /**
@@ -350,19 +382,37 @@ function delete_old_token() {
  * 複雑なwhere条件を作る
  * 
  * @param array $bind 参照形式
+ * @param array $cond
  * @return string SQL
  * 
  */
-function make_where_condition(array &$bind, $cond = []) {
+function make_where_condition(array &$bind, array $cond) {
+    global $auth_user, $table;
     if (!$cond) {
         $where = filter_input(INPUT_POST, 'where');
         if (!$where) {
-            return '';
+            $cond = [];
         }
-        $cond = json_decode($where, true);
-        if (!is_vector($cond)) {
-            $cond = [$cond];
+        else {
+            $cond = json_decode($where, true);
+            if (!is_vector($cond)) {
+                $cond = [$cond];
+            }
         }
+
+        // 権限によって動作を変える
+        if (!is_admin()) {
+            // 一般ユーザーなら
+            if ($table === 'users') {
+                // usersテーブルは自分のデータのみ
+                $cond[] = ['column' => 'id', 'cond' => '=', 'value' => $auth_user['id']];
+            }
+            elseif (has_column($table, 'user_id')) {
+                // それ以外はuser_idというカラムを持っていたら、ログインユーザー所有のみに限定
+                $cond[] = ['column' => 'user_id', 'cond' => '=', 'value' => $auth_user['id']];
+            }
+        }
+
         $rets = [];
         foreach ($cond as $c) {
             $rets[] = make_where_condition($bind, $c);
@@ -447,8 +497,14 @@ function create_table($table, $definitions) {
     }
 }
 
+/**
+ * 管理者かどうか
+ */
+function is_admin() {
+    global $auth_user;
 
-
+    return !!$auth_user['admin'];
+}
 
 
 
@@ -464,6 +520,9 @@ function create_table($table, $definitions) {
 // ---------------------------------------------------------------------
 // メイン
 // ---------------------------------------------------------------------
+
+// 認証済みユーザーのID
+$auth_user = [];
 
 // コマンドを取得
 $command = strtoupper(filter_input(INPUT_GET, 'cmd'));
@@ -501,14 +560,16 @@ if ($command === 'MIGRATE') {
         if (defined('USERS_TABLE_DATA')) {
             try {
                 foreach (USERS_TABLE_DATA as $row) {
-                    $stmt = $pdo->prepare('INSERT INTO users (username, password, email, created_at, updated_at) VALUES (?,?,?,?,?)');
-                    $stmt->execute([
-                        $row['username'],
-                        $row['password'],
-                        $row['email'],
-                        $now,
-                        $now
-                    ]);
+                    $placeholders = array_fill(0, count($row)+2, '?');
+                    $fields = array_keys($row);
+                    $fields[] = 'created_at';
+                    $fields[] = 'updated_at';
+                    $stmt = $pdo->prepare('INSERT INTO users (' . implode(',', $fields) . ') VALUES (' . implode(',', $placeholders) . ')');
+
+                    $values = array_values($row);
+                    $values[] = $now;
+                    $values[] = $now;
+                    $stmt->execute($values);
                 }
             }
             catch(PDOException $e) {
@@ -571,16 +632,14 @@ elseif ($command === 'AUTH') {
 // ---------------------------------------------------------------------
 // 取得・追加・更新・削除
 // ---------------------------------------------------------------------
-elseif ($command === 'GET' || $command === 'ADD' || $command === 'CHANGE' || $command === 'DELETE') {
+elseif ($command === 'GET' || $command === 'ADD' || $command === 'UPDATE' || $command === 'DELETE') {
     // ---------------------------------------------------------------------
     // 共通部分
     // ---------------------------------------------------------------------
 
     // トークンのチェック
-    $user_id = get_user_id_by_token();
-    if (!$user_id) {
-        // トークンが不正なら5秒待たせる
-        sleep(5);
+    $auth_user = get_user_id_by_token();
+    if (!$auth_user) {
         return_json(false, 'トークンが正しくありません');
     }
     delete_old_token();
@@ -598,7 +657,7 @@ elseif ($command === 'GET' || $command === 'ADD' || $command === 'CHANGE' || $co
     // whereがある場合は設定される
     // ---------------------------------------------------------------------
     $bind = [];
-    $where = make_where_condition($bind);
+    $where = make_where_condition($bind, []);
 
     // ---------------------------------------------------------------------
     // orderがある場合は設定される
@@ -638,6 +697,12 @@ elseif ($command === 'GET' || $command === 'ADD' || $command === 'CHANGE' || $co
     // ADD
     // ---------------------------------------------------------------------
     if ($command === 'ADD') {
+        if (!is_admin()) {
+            if ($table === 'users') {
+                return_json(false, '一般ユーザーはユーザーを追加できません');
+            }
+        }
+
         $columns = [];
         $values  = [];
         decompose_input_data($columns, $values);
@@ -655,9 +720,9 @@ elseif ($command === 'GET' || $command === 'ADD' || $command === 'CHANGE' || $co
     }
 
     // ---------------------------------------------------------------------
-    // CHANGE
+    // UPDATE
     // ---------------------------------------------------------------------
-    if ($command === 'CHANGE') {
+    if ($command === 'UPDATE') {
         $columns = [];
         $values  = [];
         decompose_input_data($columns, $values);

@@ -51,7 +51,7 @@ php -S 127.0.0.1:3000 json.php
 {
     "books": {
         "id": "KEY",
-        "user_id": "INTEGER",
+        "user_id": "INTEGER NOT NULL",
         "name": "TEXT",
         "price": "INTEGER",
         "created_at": "TEXT",
@@ -79,10 +79,19 @@ php -S 127.0.0.1:3000 json.php
 }
 ```
 
-&nbsp;
+#### users テーブル
 
 マイグレーション時に `users` テーブルを作り、初期のユーザーを登録します。  
-最初に登録したいユーザーがいたら、 `USERS_TABLE_DATA` に設定してください。
+最初に登録したいユーザーがいたら、 `USERS_TABLE_DATA` に設定してください。  
+　  
+また、この `users` テーブルは `admin` カラムが `1` の場合は全てのレコードを操作できますが、 `0` の場合は、ログインしているユーザーのレコードのみ操作できます。
+
+#### user_id カラム
+
+もしテーブル定義に `user_id` を含んでいる場合、取得・更新時は `where` に `user_id` が自動的にセットされ、追加・更新時のデータの中に、 `user_id` が自動的にセットされます。  
+もし違う値でセットしていたとしても強制的に上書きされます。  
+**すべての人が使うが、 `users` の `id` を持たせたい、という場合は、 `user_id` とうカラム名を用いないでください。**
+
 
 ## リポジトリのファイルの説明
 
@@ -158,13 +167,15 @@ php -S 127.0.0.1:3000 json.php
 ```
 {
     "result": true,
-    "data": []
+    "data": {
+        "id": 123 // 挿入された id が返却される
+    }
 }
 ```
 
 ### データ更新
 
-- http://example.com/json.php?cmd=change&table=books
+- http://example.com/json.php?cmd=update&table=books
 - METHOD: POST
 - DATA:
     - `token` （必須）

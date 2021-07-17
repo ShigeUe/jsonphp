@@ -15,13 +15,6 @@
 import { JsonPHP } from './jsonphp.js';
 ```
 
-### 設定
-
-```
-// json.phpにアクセスするURLを設定します。
-JsonPHP.init({ url: 'https://example.com/json.php' });
-```
-
 &nbsp;
 
 ### リファレンス
@@ -34,10 +27,23 @@ JsonPHP.init({ url: 'https://example.com/json.php' });
 もしくは `.then` と `.catch` を使って、エラーを補足してください。  
 詳しくは `sample.html` をご覧ください。
 
+#### 設定とインスタンスの取得
+
+URLを設定し、インスタンスを返します。
+
+```
+// json.phpにアクセスするURLを設定し、インスタンスを取得します。
+jsonphp = JsonPHP.init({ url: 'https://example.com/json.php' });
+```
+
+&nbsp;
+
+これ以降のメソッドは、そのインスタンスを利用していると仮定します。
+
 #### マイグレーション
 
 ```
-await JsonPHP.migrate();
+await jsonphp.migrate();
 ```
 
 #### パスワードハッシュ
@@ -45,7 +51,7 @@ await JsonPHP.migrate();
 引数にパスワードを渡すと、ハッシュ化されたものを返します。
 
 ```
-hash = await JsonPHP.hash(password);
+hash = await jsonphp.hash(password);
 ```
 
 #### トークンのセット
@@ -54,15 +60,23 @@ hash = await JsonPHP.hash(password);
 このメソッドはJsonPHPを返しますので、メソッドチェーン出来ます。
 
 ```
-JsonPHP.setToken(token);
+jsonphp.setToken(token);
+```
+
+#### トークンを取得する
+
+ログインした後に、ローカルストレージなどに `token` を保存したい場合などに使います。
+
+```
+token = jsonphp.getToken();
 ```
 
 #### ログイン
 
-このメソッドはトークンを返しますが、JsonPHP.tokenでも取り出せます。
+成功すると `token` を返します。
 
 ```
-token = await JsonPHP.auth(username, password);
+token = await jsonphp.auth(username, password);
 ```
 
 &nbsp;
@@ -70,7 +84,7 @@ token = await JsonPHP.auth(username, password);
 #### tableメソッド
 
 テーブルを特定し、JsonPHPのインスタンスを返します。  
-`where` 、`orWhere`, `order` 、 `get` 、 `add` 、 `change` 、 `delete` 、はメソッドチェーンで指定します。
+`where` 、`orWhere`, `order` 、 `get` 、 `add` 、 `update` 、 `delete` 、はメソッドチェーンで指定します。
 
 ```
 instance = JsonPHP.table('books'); // JsonPHPのインスタンスを返します。
@@ -152,6 +166,8 @@ data = await JsonPHP
 
 #### データの取得
 
+テーブルに `user_id` があれば、ログインしているユーザーの `id` が `where` に自動的に設定されます。
+
 ```
 // 以下の例では全件取得
 data = await JsonPHP.table('books').get();
@@ -160,25 +176,33 @@ data = await JsonPHP.table('books').get();
 #### データの追加
 
 `add` メソッドの引数はオブジェクトでデータを与えます。  
- テーブルに `created_at` と `updated_at` のカラムがあれば自動的に設定されます。
+ テーブルに `created_at` と `updated_at` のカラムがあれば自動的に設定されます。  
+ テーブルに `user_id` があれば、ログインしているユーザーの `id` が自動的に設定されます。  
+&nbsp;  
+挿入が成功すると、挿入されたレコードの `id` を返します。
 
 ```
-await JsonPHP.table('books').add({user_id: 1, name: 'PHPマニュアル', price: 2900});
+id = await JsonPHP.table('books').add({user_id: 1, name: 'PHPマニュアル', price: 2900});
 ```
 
 #### データの更新
 
-`change` メソッドの第一引数は更新するデータを与えます。テーブルに `updated_at` カラムがあれば自動的に設定されます。  
-第二引数は `get` メソッドと同じ検索用のパラメータです。
+`update` メソッドの第一引数は更新するデータを与えます。テーブルに `updated_at` カラムがあれば自動的に設定されます。  
+テーブルに `user_id` があれば、ログインしているユーザーの `id` が設定されます。  
+&nbsp;  
+第二引数は `get` メソッドと同じ検索用のパラメータです。  
+テーブルに `user_id` があれば、 検索用のパラメータにログインしているユーザーの `id` が自動的に設定されます。
 
 ```
-await JsonPHP.table('books').where('id', '=', 22).change({price: 3900});
+await JsonPHP.table('books').where('id', '=', 22).update({price: 3900});
 ```
 
 #### データの削除
 
 `delete` メソッドの引数は `get` メソッドと同じ検索用のパラメータです。  
 引数を与えないと全件削除します。ご注意ください。
+
+テーブルに `user_id` があれば、ログインしているユーザーの `id` が `where` に自動的に設定されます。
 
 ```
 await JsonPHP.table('books').where('id', '=', 22).delete();

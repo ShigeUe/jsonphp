@@ -99,9 +99,6 @@
             <h3>Add a book.</h3>
             <table>
                 <tr>
-                    <th>user_id: </th><td><input type="text" name="user_id" required></td>
-                </tr>
-                <tr>
                     <th>name: </th><td><input type="text" name="name" required></td>
                 </tr>
                 <tr>
@@ -111,8 +108,8 @@
             <br>
             <button type="button" id="ADD">ADD</button>
         </form> 
-        <form id="change_form">
-            <h3>Change a book.</h3>
+        <form id="update_form">
+            <h3>Update a book.</h3>
             idは必須。name、priceは変えたいものを入れる。<br>
             <br>
             <table>
@@ -127,7 +124,7 @@
                 </tr>
             </table>
             <br>
-            <button type="button" id="CHANGE">CHANGE</button>
+            <button type="button" id="UPDATE">UPDATE</button>
         </form> 
         <form id="delete_form">
             <h3>Delete a book.</h3>
@@ -160,7 +157,7 @@
 <script type="module">
 import JsonPHP from './jsonphp.js';
 
-JsonPHP.init({url: './json.php'});
+const $jsonphp = JsonPHP.init({url: './json.php'});
 
 // 認証
 document.getElementById('AUTH').addEventListener('click', () => {
@@ -168,9 +165,9 @@ document.getElementById('AUTH').addEventListener('click', () => {
     const username = form.username.value;
     const password = form.password.value;
 
-    JsonPHP.auth(username, password)
-        .then((token) => {
-            document.getElementById('token').value = token;
+    $jsonphp.auth(username, password)
+        .then(() => {
+            document.getElementById('token').value = $jsonphp.getToken();
             form.reset();
             document.getElementById('GET').dispatchEvent(new Event('click'));
         })
@@ -184,10 +181,9 @@ document.getElementById('ADD').addEventListener('click', () => {
     const data = {
         name: form.name.value,
         price: form.price.value,
-        user_id: form.user_id.value,
     };
 
-    JsonPHP.table('books').add(data)
+    $jsonphp.table('books').add(data)
         .then((r) => {
             form.reset();
             console.log(r);
@@ -196,8 +192,8 @@ document.getElementById('ADD').addEventListener('click', () => {
         .catch((e) => alert(e));
 });
 // 更新
-document.getElementById('CHANGE').addEventListener('click', () => {
-    const form = document.getElementById('change_form');
+document.getElementById('UPDATE').addEventListener('click', () => {
+    const form = document.getElementById('update_form');
     if (!form.id.value) {
         return;
     }
@@ -211,7 +207,7 @@ document.getElementById('CHANGE').addEventListener('click', () => {
         data.price = form.price.value;
     }
 
-    JsonPHP.table('books').where(where).change(data)
+    $jsonphp.table('books').where(where).update(data)
         .then(() => {
             form.reset();
             document.getElementById('GET').dispatchEvent(new Event('click'));
@@ -222,7 +218,7 @@ document.getElementById('CHANGE').addEventListener('click', () => {
 document.getElementById('DELETE').addEventListener('click', () => {
     const form = document.getElementById('delete_form');
 
-    JsonPHP.table('books').where('id', '=', form.id.value).delete()
+    $jsonphp.table('books').where('id', '=', form.id.value).delete()
         .then(() => {
             form.reset();
             document.getElementById('GET').dispatchEvent(new Event('click'));
@@ -234,7 +230,7 @@ document.getElementById('GET').addEventListener('click', async () => {
     const get_id = document.getElementById('get_id').value;
     const get_name = document.getElementById('get_name').value;
 
-    const JPHP = JsonPHP.table('books').field('id', 'name', 'price', 'updated_at');
+    const JPHP = $jsonphp.table('books').field('id', 'user_id', 'name', 'price', 'updated_at');
 
     if (get_id != '') {
         JPHP.where('id', '=', get_id);
@@ -291,7 +287,7 @@ document.getElementById('CLEAR').addEventListener('click', () => {
 });
 // マイグレーション
 document.getElementById('MIGRATE').addEventListener('click', () => {
-    JsonPHP.migrate()
+    $jsonphp.migrate()
         .then(() => {
             RESULT.innerText = "マイグレーション完了";
         })
@@ -304,7 +300,7 @@ document.getElementById('HASH').addEventListener('click', () => {
         return;
     }
 
-    JsonPHP.hash(form.password.value)
+    $jsonphp.hash(form.password.value)
         .then((hash) => {
             RESULT.innerText = hash;
         })
@@ -315,7 +311,7 @@ document.getElementById('SET_TOKEN').addEventListener('click', () => {
     const token = document.getElementById('token').value;
 
     if (token) {
-        JsonPHP.setToken(token);
+        $jsonphp.setToken(token);
     }
 });
 </script>
