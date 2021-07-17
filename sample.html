@@ -157,7 +157,9 @@
 <script type="module">
 import JsonPHP from './jsonphp.js';
 
-const $jsonphp = JsonPHP.init({url: './json.php'});
+JsonPHP.init({url: './json.php'});
+
+let $jsonphp;
 
 // 認証
 document.getElementById('AUTH').addEventListener('click', () => {
@@ -165,9 +167,10 @@ document.getElementById('AUTH').addEventListener('click', () => {
     const username = form.username.value;
     const password = form.password.value;
 
-    $jsonphp.auth(username, password)
-        .then(() => {
-            document.getElementById('token').value = $jsonphp.getToken();
+    JsonPHP.auth(username, password)
+        .then((j) => {
+            $jsonphp = j;
+            document.getElementById('token').value = JsonPHP.getToken();
             form.reset();
             document.getElementById('GET').dispatchEvent(new Event('click'));
         })
@@ -186,7 +189,6 @@ document.getElementById('ADD').addEventListener('click', () => {
     $jsonphp.table('books').add(data)
         .then((r) => {
             form.reset();
-            console.log(r);
             document.getElementById('GET').dispatchEvent(new Event('click'));
         })
         .catch((e) => alert(e));
@@ -230,16 +232,16 @@ document.getElementById('GET').addEventListener('click', async () => {
     const get_id = document.getElementById('get_id').value;
     const get_name = document.getElementById('get_name').value;
 
-    const JPHP = $jsonphp.table('books').field('id', 'user_id', 'name', 'price', 'updated_at');
+    $jsonphp.table('books').field('id', 'user_id', 'name', 'price', 'updated_at');
 
     if (get_id != '') {
-        JPHP.where('id', '=', get_id);
+        $jsonphp.where('id', '=', get_id);
     }
     else if (get_name != '') {
-        JPHP.where('name', 'like', get_name);
+        $jsonphp.where('name', 'like', get_name);
     }
 
-    const ret = JPHP.get()
+    const ret = $jsonphp.get()
         .then((ret) => {
             const RESULT = document.getElementById('RESULT');
 
@@ -287,7 +289,7 @@ document.getElementById('CLEAR').addEventListener('click', () => {
 });
 // マイグレーション
 document.getElementById('MIGRATE').addEventListener('click', () => {
-    $jsonphp.migrate()
+    JsonPHP.migrate()
         .then(() => {
             RESULT.innerText = "マイグレーション完了";
         })
@@ -300,7 +302,7 @@ document.getElementById('HASH').addEventListener('click', () => {
         return;
     }
 
-    $jsonphp.hash(form.password.value)
+    JsonPHP.hash(form.password.value)
         .then((hash) => {
             RESULT.innerText = hash;
         })
@@ -311,7 +313,7 @@ document.getElementById('SET_TOKEN').addEventListener('click', () => {
     const token = document.getElementById('token').value;
 
     if (token) {
-        $jsonphp.setToken(token);
+        $jsonphp = JsonPHP.setToken(token);
     }
 });
 </script>
