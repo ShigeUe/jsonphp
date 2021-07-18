@@ -110,6 +110,15 @@ php -S 127.0.0.1:3000 json.php
 
 - `users` テーブルで認証します。
 - パスワードはハッシュしてください。ハッシュの作成は「利用方法」をご覧ください。
+- `guest` ユーザーを作っている＆テーブルに `user_id` カラムが無い、という状況では認証は要求されません。
+
+例：
+
+```
+JsonPHP.init({ url: '/json.php' });
+// booksに user_id が無い場合は、これで books のレコードが全取得される。
+JsonPHP.new().table('books').get();
+```
 
 &nbsp;
 

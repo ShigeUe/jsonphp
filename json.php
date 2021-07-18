@@ -21,6 +21,13 @@ define('USERS_TABLE_DATA', [
         "password" => '$2y$10$MqTUmfUeTltU1MLti5u3eOzE6qpVWQ6IWzxBouXPYn.WBqf.WPn66', // PassWord
         "admin"    => 1, // 0=一般ユーザー、1=管理者。管理者に設定
         "email"    => 'admin@example.com'
+    ],
+    [
+        "username" => 'guest',
+        // guestユーザーの
+        "password" => '$2y$10$xPu.qA.V2rBdimHI8z4w5ez/PUwGt6/Xz.nx.WgC6R71i6QGjadKq', // guest
+        "admin"    => 0,
+        "email"    => 'admin@example.com'
     ]
 ]);
 
@@ -209,8 +216,6 @@ function decompose_input_data(&$columns, &$values) {
             $values[] = $auth_user['id'];
         }
     }
-
-
 }
 
 /**
@@ -498,6 +503,7 @@ function create_table($table, $definitions) {
 }
 
 /**
+ * is_admin
  * 管理者かどうか
  */
 function is_admin() {
@@ -506,7 +512,45 @@ function is_admin() {
     return !!$auth_user['admin'];
 }
 
+/**
+ * guest_exists
+ * ゲストアカウントがあるか
+ */
+function guest_exists() {
+    if (!defined('USERS_TABLE_DATA')) {
+        return false;
+    }
+    foreach (USERS_TABLE_DATA as $row) {
+        if ($row['username'] === 'guest') {
+            return true;
+        }
+    }
+    return false;
+}
 
+/**
+ * get_the_guest
+ * ゲストユーザーを取得
+ */
+function get_the_guest() {
+    global $pdo;
+    if (!guest_exists()) {
+        return false;
+    }
+    $user = false;
+    try {
+        $stmt = $pdo->prepare("SELECT * FROM users WHERE username='guest'");
+        $stmt->execute();
+        $row = $stmt->fetch(PDO::FETCH_ASSOC);
+        if ($row) {
+            $user = $row;
+        }
+    }
+    catch(PDOException $e) {
+        return_json(false, "SQLエラー：" . $e->getMessage());
+    }
+    return $user;
+}
 
 
 
@@ -607,7 +651,8 @@ elseif ($command === 'AUTH') {
     $username = filter_input(INPUT_POST, 'username');
     $password = filter_input(INPUT_POST, 'password');
     
-    if (!$username || !$password) {
+    if (!$username || !$password || $username === 'guest') {
+        // guestはパスワード認証させない（トークンを作らせない）
         return_json(false, 'usernameまたはpasswordが指定されていません');
     }
 
@@ -637,13 +682,6 @@ elseif ($command === 'GET' || $command === 'ADD' || $command === 'UPDATE' || $co
     // 共通部分
     // ---------------------------------------------------------------------
 
-    // トークンのチェック
-    $auth_user = get_user_id_by_token();
-    if (!$auth_user) {
-        return_json(false, 'トークンが正しくありません');
-    }
-    delete_old_token();
-
     // テーブル名を取得
     $table = filter_input(INPUT_GET, 'table');
     if (!$table) {
@@ -652,6 +690,18 @@ elseif ($command === 'GET' || $command === 'ADD' || $command === 'UPDATE' || $co
     if (!table_exists($table)) {
         return_json(false, 'テーブル名が正しくありません');
     }
+
+    // トークンのチェック
+    $auth_user = get_user_id_by_token();
+    if (!$auth_user) {
+        if (!has_column($table, 'user_id')) {
+            $auth_user = get_the_guest();
+        }
+        if (!$auth_user) {
+            return_json(false, 'アクセスできません');
+        }
+    }
+    delete_old_token();
 
     // ---------------------------------------------------------------------
     // whereがある場合は設定される

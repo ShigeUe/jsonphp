@@ -3,15 +3,19 @@ export default class JsonPHP {
   // スタティック用
   // -------------------------------------------------------------------------
 
-  static token;
+  static token = '';
 
-  static url;
+  static url = '';
 
   static init(options) {
     if (typeof options !== 'object' || !options.url) {
       throw new Error('設定が正しくありません');
     }
     JsonPHP.url = options.url;
+  }
+
+  static new() {
+    return new JsonPHP();
   }
 
   static setToken(token) {
@@ -198,7 +202,9 @@ export default class JsonPHP {
 
   async fetch(mode, body) {
     const inputBody = body;
-    inputBody.token = JsonPHP.token;
+    if (JsonPHP.token) {
+      inputBody.token = JsonPHP.token;
+    }
 
     const params = {};
     params.method = 'POST';
